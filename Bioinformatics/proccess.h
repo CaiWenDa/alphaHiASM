@@ -13,28 +13,35 @@
 #include <algorithm>
 
 namespace cwd {
+	using namespace std;
+	const size_t KMER_LEN = 31;
+	const size_t KMER_STEP = 31;
 
-	const size_t KMER_LEN = 15;
-	const size_t KMER_STEP = 1;
-
-	struct kmer_hash;
 	typedef struct {
 		size_t readID;
 		size_t begin;
-		size_t end;
+		// size_t end;
 	} hashValue_t;
 	typedef std::string kmer_t;
+	typedef seqan::StringSet<seqan::Dna5String> seqData_t;
 	// typedef std::tuple<size_t, size_t, size_t> hashValue_t; // (readId, begin, end)
 	typedef std::unordered_multimap<kmer_t, hashValue_t> kmerHashTable_t;
 	typedef std::pair<size_t, size_t> numPair_t;
 	typedef numPair_t posPair_t;
 
 	typedef struct {
+		// bool orient = true;
 		size_t SP1;
 		size_t SP2;
 		size_t EP1;
 		size_t EP2;
 	} overlapInfo_t;
+
+	typedef struct {
+		bool orient = true;
+		size_t SP1;
+		size_t SP2;
+	} alignInfo_t;
 
 	struct kmer_hash {
 		size_t operator()(const kmer_t& kmer) const
@@ -56,11 +63,11 @@ namespace cwd {
 		}
 	};
 
-	kmerHashTable_t& createKmerHashTable(const seqan::StringSet<seqan::Dna5String>& seq);
+	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
 	std::list<posPair_t>& chainFromStart(std::unordered_multimap<kmer_t, posPair_t>& CKS, int k, int ks, int alpha, double beta, double gamma);
 	overlapInfo_t finalOverlap(std::list<posPair_t>& chain, size_t len1, size_t len2);
 	size_t maxKmerFrequency(std::ifstream& kmerFrequency);
-	std::unordered_multimap<size_t, posPair_t>* findSameKmer(kmerHashTable_t& kmerHashTable, seqan::StringSet<seqan::Dna5String>& seq);
+	std::unordered_multimap<size_t, posPair_t>& findSameKmer(kmerHashTable_t& kmerHashTable, seqan::Dna5String& seq);
 
 	template<typename T, typename R>
 	std::unordered_multimap<kmer_t, posPair_t> getCommonKmerSet(T range, R read)
@@ -87,8 +94,9 @@ namespace cwd {
 		return commonKmerSet;
 	}
 
-	seqan::StringSet<seqan::Dna5String>* loadSeqData(const std::string& seqFileName);
+	seqData_t* loadSeqData(const std::string& seqFileName);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(const size_t& r, const size_t& i, std::__cxx11::list<cwd::posPair_t>& chain, seqan::StringSet<seqan::Dna5String>& seq);
-
+	void outputOverlapInfo(const size_t& r, const size_t& i, std::__cxx11::list<posPair_t>& chain, seqData_t& seq);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq);
+	kmer_t revComp(const kmer_t& kmer);
 }
