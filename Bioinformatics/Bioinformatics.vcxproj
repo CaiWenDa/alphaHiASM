@@ -76,7 +76,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>/usr/local/include;/home/caiwenda/seqan/include;</IncludePath>
+    <IncludePath>/usr/include;/usr/local/include;/usr/lib/gcc/x86_64-linux-gnu/9/include;/usr/include/x86_64-linux-gnu;/home/caiwenda/seqan/include</IncludePath>
     <TargetExt>.</TargetExt>
   </PropertyGroup>
   <ItemGroup>
@@ -84,7 +84,6 @@
     <ClCompile Include="proccess.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="main.h" />
     <ClInclude Include="proccess.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <cstdio>
 #include <string>
 #include <iostream>
@@ -12,41 +12,43 @@
 #include <list>
 #include <algorithm>
 
+
 namespace cwd {
 	using namespace std;
-	const size_t KMER_LEN = 31;
-	const size_t KMER_STEP = 31;
-
+	const uint KMER_LEN = 31;
+	const uint KMER_STEP = 31;
+	template<typename T1, typename T2>
+	using hash = std::unordered_multimap<T1, T2>;
 	typedef struct {
-		size_t readID;
-		size_t begin;
-		// size_t end;
+		uint readID;
+		uint begin;
+		// uint end;
 	} hashValue_t;
 	typedef std::string kmer_t;
 	typedef seqan::StringSet<seqan::Dna5String> seqData_t;
-	// typedef std::tuple<size_t, size_t, size_t> hashValue_t; // (readId, begin, end)
-	typedef std::unordered_multimap<kmer_t, hashValue_t> kmerHashTable_t;
-	typedef std::pair<size_t, size_t> numPair_t;
+	// typedef std::tuple<uint, uint, uint> hashValue_t; // (readId, begin, end)
+	typedef hash<kmer_t, hashValue_t> kmerHashTable_t;
+	typedef std::pair<uint, uint> numPair_t;
 	typedef numPair_t posPair_t;
 
 	typedef struct {
-		// bool orient = true;
-		size_t SP1;
-		size_t SP2;
-		size_t EP1;
-		size_t EP2;
+		uint SP1;
+		uint SP2;
+		uint EP1;
+		uint EP2;
+		bool orient = true;
 	} overlapInfo_t;
 
 	typedef struct {
 		bool orient = true;
-		size_t SP1;
-		size_t SP2;
+		uint SP1;
+		uint SP2;
 	} alignInfo_t;
 
 	struct kmer_hash {
-		size_t operator()(const kmer_t& kmer) const
+		uint operator()(const kmer_t& kmer) const
 		{
-			size_t hash = 0;
+			uint hash = 0;
 			for (auto dntp : kmer)
 			{
 				switch (char(dntp))
@@ -64,39 +66,45 @@ namespace cwd {
 	};
 
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
-	std::list<posPair_t>& chainFromStart(std::unordered_multimap<kmer_t, posPair_t>& CKS, int k, int ks, int alpha, double beta, double gamma);
-	overlapInfo_t finalOverlap(std::list<posPair_t>& chain, size_t len1, size_t len2);
-	size_t maxKmerFrequency(std::ifstream& kmerFrequency);
-	std::unordered_multimap<size_t, posPair_t>& findSameKmer(kmerHashTable_t& kmerHashTable, seqan::Dna5String& seq);
+	unique_ptr<list<alignInfo_t>> chainFromStart(hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, double beta, double gamma);
+	overlapInfo_t finalOverlap(std::list<alignInfo_t>& chain, uint len1, uint len2);
+	uint maxKmerFrequency(std::ifstream& kmerFrequency);
+	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqan::Dna5String& seq);
 
 	template<typename T, typename R>
-	std::unordered_multimap<kmer_t, posPair_t> getCommonKmerSet(T range, R read)
+	unique_ptr<hash<kmer_t, alignInfo_t>> getCommonKmerSet(T range, R read)
 	{
 
-		std::unordered_multimap<kmer_t, posPair_t> commonKmerSet;
+		unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );
 		std::set<kmer_t> keySet;
 		while (range.first != range.second)
 		{
-			size_t startPos1 = std::get<0>(range.first->second);
-			size_t startPos2 = std::get<1>(range.first->second);
+			uint startPos1 = (range.first->second).SP1;
+			uint startPos2 = (range.first->second).SP2;
+			bool orient = range.first->second.orient;
 			kmer_t kmer = { seqan::begin(read) + startPos1, seqan::begin(read) + startPos1 + KMER_LEN };
-			commonKmerSet.insert({ kmer, {startPos1, startPos2} });
+			commonKmerSet->insert({ kmer, {orient, startPos1, startPos2} });
 			keySet.insert(kmer);
 			++range.first;
 		}
 		for (auto kmer : keySet)
 		{
-			if (commonKmerSet.count(kmer) > 1)
+			if (commonKmerSet->count(kmer) > 1)
 			{
-				commonKmerSet.erase(kmer);
+				commonKmerSet->erase(kmer);
 			}
 		}
+		//int num = count_if(commonKmerSet->begin(), commonKmerSet->end(), [](decltype(*commonKmerSet->begin())& a) {return a.second.orient == true;	});
+		//for (auto& x : *commonKmerSet)
+		//{
+		//	x.second.orient = num > commonKmerSet->size() / 2 ? true : false;
+		//}
 		return commonKmerSet;
 	}
 
 	seqData_t* loadSeqData(const std::string& seqFileName);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(const size_t& r, const size_t& i, std::__cxx11::list<posPair_t>& chain, seqData_t& seq);
+	void outputOverlapInfo(const uint& r, const uint& i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq);
 	kmer_t revComp(const kmer_t& kmer);
 }
