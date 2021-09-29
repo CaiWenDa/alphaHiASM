@@ -4,19 +4,19 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <seqan/seq_io.h>
-#include <seqan/align.h>
+#include "seqan/seq_io.h"
+#include "seqan/align.h"
 #include <unordered_map>
 #include <tuple>
 #include <set>
 #include <list>
 #include <algorithm>
-
+#include <memory>
 
 namespace cwd {
 	using namespace std;
 	const uint KMER_LEN = 31;
-	const uint KMER_STEP = 31;
+	const uint KMER_STEP = 1;
 	template<typename T1, typename T2>
 	using hash = std::unordered_multimap<T1, T2>;
 	typedef struct {
@@ -102,9 +102,9 @@ namespace cwd {
 		return commonKmerSet;
 	}
 
-	seqData_t* loadSeqData(const std::string& seqFileName);
+	seqData_t* loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(const uint& r, const uint& i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq);
+	void outputOverlapInfo(uint r, uint & i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID);
 	kmer_t revComp(const kmer_t& kmer);
 }
