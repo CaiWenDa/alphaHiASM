@@ -12,19 +12,39 @@
 #include <list>
 #include <algorithm>
 #include <memory>
+#include <random>
+#include <cstdlib>
 
 namespace cwd {
 	using namespace std;
 	const uint KMER_LEN = 31;
-	const uint KMER_STEP = 1;
-	template<typename T1, typename T2>
-	using hash = std::unordered_multimap<T1, T2>;
+	template<typename T1, typename T2, typename T3 = std::hash<T1>>
+	using hash = std::unordered_multimap<T1, T2, T3>;
 	typedef struct {
 		uint readID;
 		uint begin;
 		// uint end;
 	} hashValue_t;
 	typedef std::string kmer_t;
+	struct kmer_hash {
+		uint operator()(const kmer_t& kmer) const
+		{
+			uint hash = 0;
+			for (auto dntp : kmer)
+			{
+				switch (char(dntp))
+				{
+				case 'A': hash <<= 2;break;
+				case 'T': hash = (hash << 2) + 1;break;
+				case 'C': hash = (hash << 2) + 2;break;
+				case 'G': hash = (hash << 2) + 3;break;
+				default:
+					break;
+				}
+			}
+			return hash;
+		}
+	};
 	typedef seqan::StringSet<seqan::Dna5String> seqData_t;
 	// typedef std::tuple<uint, uint, uint> hashValue_t; // (readId, begin, end)
 	typedef hash<kmer_t, hashValue_t> kmerHashTable_t;
@@ -45,31 +65,11 @@ namespace cwd {
 		uint SP2;
 	} alignInfo_t;
 
-	struct kmer_hash {
-		uint operator()(const kmer_t& kmer) const
-		{
-			uint hash = 0;
-			for (auto dntp : kmer)
-			{
-				switch (char(dntp))
-				{
-				case 'A': hash <<= 2;break;
-				case 'T': hash = (hash << 2) + 1;break;
-				case 'C': hash = (hash << 2) + 2;break;
-				case 'G': hash = (hash << 2) + 3;break;
-				default:
-					break;
-				}
-			}
-			return hash;
-		}
-	};
-
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
-	unique_ptr<list<alignInfo_t>> chainFromStart(hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, double beta, double gamma);
+	unique_ptr<list<alignInfo_t>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, double beta, double gamma, int r, int t);
 	overlapInfo_t finalOverlap(std::list<alignInfo_t>& chain, uint len1, uint len2);
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
-	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqan::Dna5String& seq);
+	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
 
 	template<typename T, typename R>
 	unique_ptr<hash<kmer_t, alignInfo_t>> getCommonKmerSet(T range, R read)
@@ -107,4 +107,5 @@ namespace cwd {
 	void outputOverlapInfo(uint r, uint & i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID);
 	kmer_t revComp(const kmer_t& kmer);
+	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int e);
 }
