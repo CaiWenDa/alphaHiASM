@@ -14,6 +14,7 @@
 #include <memory>
 #include <random>
 #include <cstdlib>
+#include <ctime>
 
 namespace cwd {
 	using namespace std;
@@ -66,8 +67,8 @@ namespace cwd {
 	} alignInfo_t;
 
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
-	unique_ptr<list<alignInfo_t>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, double beta, double gamma, int r, int t);
-	overlapInfo_t finalOverlap(std::list<alignInfo_t>& chain, uint len1, uint len2);
+	unique_ptr<list<alignInfo_t>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t);
+	vector<overlapInfo_t> finalOverlap(std::list<alignInfo_t>& chain, uint len1, uint len2);
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
 	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
 
@@ -104,8 +105,9 @@ namespace cwd {
 
 	seqData_t* loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(uint r, uint & i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile);
+	void outputOverlapInfo(uint r, uint & i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID);
 	kmer_t revComp(const kmer_t& kmer);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int e);
+	std::string getCurrentDate();
 }
