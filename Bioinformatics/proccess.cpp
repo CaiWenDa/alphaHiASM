@@ -16,6 +16,7 @@ kmerHashTable_t& cwd::createKmerHashTable(const seqData_t& seq)
 	uint readID = 0;
 	std::default_random_engine dre;
 	std::uniform_int_distribution<int> di(1, KMER_LIMIT);
+	cout << "Creating HashTable...\n";
 	for (auto& read : seq)
 	{
 		uint pos = 0;
@@ -28,23 +29,23 @@ kmerHashTable_t& cwd::createKmerHashTable(const seqData_t& seq)
 		}
 		readID++;
 	}
-	cout << "Created HashTable!\n";
+	cout << "HashTable has been created!\n";
 	return *kmerHashTable;
 }
 
-unique_ptr<list<alignInfo_t>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t)
+vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t)
 {
-	unique_ptr<list<alignInfo_t>> chain( new list<alignInfo_t>() );
+	shared_ptr<list<alignInfo_t>> chain( new list<alignInfo_t>() );
+	vector<decltype(chain)> chain_v;
 	// chain->push_back(CKS.begin()->second);
 	vector<alignInfo_t> cks;
-	int count = 0;
-	auto iend = chain->begin();
+	//auto iend = chain->begin();
 	// cout << CKS.size();
 	for (auto& kmer : CKS)
 	{
 		cks.push_back(kmer.second);
 	}
-	sort(cks.begin(), cks.end(), [](alignInfo_t a, alignInfo_t b) { return a.SP1 < b.SP1; });
+	sort(cks.begin(), cks.end(), [](alignInfo_t& a, alignInfo_t& b) { return a.SP1 < b.SP1; });
 	chain->push_back(*cks.begin());
 	for (auto ix = cks.begin(), nextx = next(ix); ix != cks.end() && nextx != cks.end();)
 	{
@@ -66,7 +67,6 @@ unique_ptr<list<alignInfo_t>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, a
 			{
 				//chain->push_back(*ix);
 				chain->push_back(*nextx);
-				count++;
 				//ix = next(nextx);
 				//nextx = next(ix);
 				ix = nextx;
@@ -74,52 +74,29 @@ unique_ptr<list<alignInfo_t>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, a
 			}
 			else if (d1 < beta && d2 < beta)
 			{
-				if (d1 < d2)
+				if ((double)d1 / d2 > 0.9 || (double)d2 / d1 > 0.9)
 				{
-					int s = ix->SP1 + ks;
-					int e = nextx->SP1;
-					if (findSmallerSameKmer(seq, r, t, ks, s, e))
+					int s = min(ix->SP1, nextx->SP1), s2 = min(ix->SP2, nextx->SP2);
+					int min_d = min(d1, d2);
+					if (findSmallerSameKmer(seq, r, t, ks, s, s2, min_d,ix->orient && nextx->orient))
 					{
 						chain->push_back(*nextx);
-						count++;
 						ix = nextx;
 						nextx++;
 					}
 					else
 					{
-						if (count > CHAIN_LEN)
+						if (chain->size() > CHAIN_LEN)
 						{
-							chain->push_back(F_END);
-							iend = prev(chain->end());
+							chain_v.push_back(chain);
+							chain = decltype(chain)( new list<alignInfo_t> () );
+							//chain->push_back(F_END);
+							//iend = prev(chain->end());
 							chain->push_back(*nextx);
-							count = 1;
-						}
-						ix = nextx;
-						nextx++;
-					}
-				}
-				if (d1 >= d2)
-				{
-					int s = ix->SP2 + ks;
-					int e = nextx->SP2;
-					if (findSmallerSameKmer(seq, t, r, ks, s, e))
-					{
-						chain->push_back(*nextx);
-						count++;
-						ix = nextx;
-						nextx++;
-					}
-					else
-					{
-						if (count > CHAIN_LEN)
-						{
-							chain->push_back(F_END);
-							iend = prev(chain->end());
-							chain->push_back(*nextx);
-							count = 1;
 						}
 						else
-							chain->erase(next(iend), chain->end());
+							chain->erase(chain->begin(), chain->end());
+						//chain->erase(next(iend), chain->end());
 						ix = nextx;
 						nextx++;
 					}
@@ -127,15 +104,17 @@ unique_ptr<list<alignInfo_t>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, a
 			}
 			else
 			{
-				if (count > CHAIN_LEN)
+				if (chain->size() > CHAIN_LEN)
 				{
-					chain->push_back(F_END);
-					iend = prev(chain->end());
+					chain_v.push_back(chain);
+					chain = decltype(chain)(new list<alignInfo_t>());
+					//chain->push_back(F_END);
+					//iend = prev(chain->end());
 					chain->push_back(*nextx);
-					count = 1;
 				}
 				else
-					chain->erase(next(iend), chain->end());
+					//chain->erase(next(iend), chain->end());
+					chain->erase(chain->begin(), chain->end());
 				ix = nextx;
 				nextx++;
 				continue;
@@ -143,16 +122,20 @@ unique_ptr<list<alignInfo_t>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, a
 		}
 		else
 		{
-			chain->push_back(F_END);
-			iend = prev(chain->end());
-			count = 0;
+			if (chain->size() > CHAIN_LEN)
+				chain_v.push_back(chain);
+			chain = decltype(chain)(new list<alignInfo_t>());
+			//chain->push_back(F_END);//
+			//iend = prev(chain->end());
 			ix = nextx;
 			nextx++;
 			continue;
 		}
 	}
-	chain->push_back(F_END);
-	return chain;
+	//chain->push_back(F_END);
+	if (chain->size() > CHAIN_LEN)
+		chain_v.push_back(chain);
+	return chain_v;
 }
 
 uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
@@ -192,28 +175,26 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	return 0;
 }
 
-vector<overlapInfo_t> cwd::finalOverlap(list<alignInfo_t>& chain, uint len1, uint len2)
+vector<overlapInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2)
 {
-	auto r1 = chain.begin();
-	auto r2 = find_if(r1, chain.end(), [](alignInfo_t a) { return a.orient == false && a.SP1 == numeric_limits<uint>::max() && a.SP2 == numeric_limits<uint>::max(); });
+	//auto r1 = chain.begin();
+	//auto r2 = find_if(r1, chain.end(), [](alignInfo_t& a) { return a.orient == false && a.SP1 == numeric_limits<uint>::max() && a.SP2 == numeric_limits<uint>::max(); });
 	vector<overlapInfo_t> res;
-	while (r2 != chain.end())
+	for (auto& ch : chain_v)
 	{
-		int d = 0;
-		if ((d = distance(r1, r2)) > 2)
+		if (ch->size() > 2)
 		{
-			auto y = prev(r2);
-			uint P1 = r1->SP1; // P1
-			uint Q1 = min_element(r1, prev(r2), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
-			uint Pnk = prev(r2)->SP1 + KMER_LEN; // Pn + k
-			uint Qnk = max_element(r1, prev(r2), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
+			uint P1 = ch->begin()->SP1; // P1
+			uint Q1 = min_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
+			uint Pnk = ch->rbegin()->SP1 + KMER_LEN; // Pn + k
+			uint Qnk = max_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
 
 			uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
 			ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
-			res.push_back({ ovl_str1, ovl_str2, ovl_end1, ovl_end2 , chain.begin()->orient });
+			res.push_back({ ovl_str1, ovl_str2, ovl_end1, ovl_end2 , ch->begin()->orient });
 		}
-		r1 = next(r2);
-		r2 = find_if(r1, chain.end(), [](alignInfo_t a) { return a.orient == false && a.SP1 == F_END.SP1 && a.SP2 == F_END.SP2; });
+		//r1 = next(r2);
+		//r2 = find_if(r1, chain_v.end(), [](alignInfo_t a) { return a.orient == false && a.SP1 == F_END.SP1 && a.SP2 == F_END.SP2; });
 	}
 	
 	//uint P1 = chain.begin()->SP1; // P1
@@ -307,17 +288,19 @@ seqData_t* cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID
 	StringSet<CharString> id;
 	//seqData_t* seq = new StringSet<Dna5String>();
 	SeqFileIn seqFileIn(seqFileName.c_str());
+	cout << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
-	cout << "Read seqFile\n";
-	//ofstream dict("dict2.txt", ios_base::out);
-	for (auto& str : id)
-	{
-		StringSet<CharString	> split;
-		strSplit(split, str);
-		erase(split[1], 0, 3);
-		appendValue(ID, split[1]);
-	}
-
+	cout << "seqFile has been read.\n";
+	//ofstream dict("dict3.txt", ios_base::out);
+	//int i = 0;
+	//for (auto& str : id)
+	//{
+	//	StringSet<CharString> split;
+	//	strSplit(split, str);
+	//	//erase(split[1], 0, 3);
+	//	//appendValue(ID, split[1]);
+	//	dict << split[0] << " " << i++ << endl;
+	//}
 	return &seq;
 }
 
@@ -342,11 +325,11 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 	}
 }
 
-void cwd::outputOverlapInfo(uint r, uint & i, std::__cxx11::list<alignInfo_t>& chain, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize)
+void cwd::outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize)
 {
 	//cout << "seq: " << r << " and: " << i << " ";
 	//cout << " has OVERLAP! " << endl;
-	auto v_ovl = finalOverlap(chain, length(seq[r]), length(seq[i]));
+	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]));
 	//cout << ovl.SP1 << " , ";
 	//cout << ovl.EP1 << " , ";
 	//cout << ovl.SP2 << " , ";
@@ -384,10 +367,10 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 			//cout << commonKmerSet.size() << endl;
 			if (commonKmerSet->size() > 0)
 			{
-				auto chain = chainFromStart(seq, *commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
-				if (chain->size() > 5)
+				auto chain_v = chainFromStart(seq, *commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
+				if (chain_v.size() > 0)
 				{
-					outputOverlapInfo(r, i, *chain, seq, ID, outFile, 600);
+					outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600);
 				}
 			}
 		}
@@ -410,28 +393,55 @@ kmer_t cwd::revComp(const kmer_t& kmer)
 			break;
 		}
 	}
-	std::reverse(rvcKmer.begin(), rvcKmer.end())	;
+	std::reverse(rvcKmer.begin(), rvcKmer.end());
 	// cout << rvcKmer;
 	return rvcKmer;
 }
 
-bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int e)
+bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient)
 {
 	//unique_ptr<cwd::hash<uint, alignInfo_t>> kmerSet(new cwd::hash<uint, alignInfo_t>);
 	auto& read1 = seq[r];
 	auto& read2 = seq[t];
-	kmer_t kmer1, kmer2;
+	
+	string gap1 = { begin(read1) + s, begin(read1) + s + d };
+	string gap2 = { begin(read2) + s2, begin(read2) + s2 + d };
+	/*kmer_t kmer1, kmer2;
 	int count = 0;
-	int step = 0;
 	for (auto i = begin(read1) + s; i < begin(read1) + e - SKMER_LEN; i++)
 	{
-		kmer1 = { i, i + SKMER_LEN };
-		kmer2 = { begin(read2) + s + step, begin(read2) + s + SKMER_LEN + step };
-		if (kmer1 == kmer2)
+		for (auto j = begin(read2) + s; j < begin(read2) + e - SKMER_LEN;)
 		{
-			count++;
+			int a = distance(begin(read2), j), b = distance(begin(read1), i);
+			if (a > b)
+			{
+				t = a - b;
+				if (t >= SKMER_LEN)
+				{
+					break;
+				}
+			}
+			else
+			{
+				t = b - a;
+				if (t >= SKMER_LEN)
+				{
+					j += t;
+				}
+			}
+			kmer1 = { i, i + SKMER_LEN };
+			kmer2 = { j, j + SKMER_LEN };
+			if (kmer1 == kmer2)
+			{
+				count++;
+				j += SKMER_LEN;
+				i += SKMER_LEN;
+			}
+			else
+			{
+				j++;
+			}
 		}
-		step++;
 	}
 	if (count > 1)
 	{
@@ -440,8 +450,8 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 		{
 			return true;
 		}
-	}
-	return false;
+	}*/
+	return hamming(gap1, gap2) < 0.5f;
 }
 
 std::string cwd::getCurrentDate()
@@ -451,4 +461,49 @@ std::string cwd::getCurrentDate()
 	char tmp[64];
 	strftime(tmp, sizeof(tmp), "%Y-%m-%d-%H-%M", localtime(&nowtime));
 	return tmp;
+}
+
+float cwd::jaccard(string& a, string& b)
+{
+	if (a == "" && b == "")
+	{
+		return 1.0f;
+	}
+	// 都为空相似度为 1
+	if (a == "" || b == "")
+	{
+		return 0.0f;
+	}
+	std::set<int> aChar(a.begin(), a.end());
+	std::set<int> bChar(b.begin(), b.end());
+	std::set<int> in;
+	std::set<int> un;
+	set_intersection(aChar.begin(), aChar.end(), bChar.begin(), bChar.end(), inserter(in, in.begin()));
+	set_union(aChar.begin(), aChar.end(), bChar.begin(), bChar.end(), inserter(un, un.begin()));
+	int inter = in.size(); // 交集数量
+	int uni = un.size(); // 并集数量
+	if (inter == 0) return 0;
+	return ((float)inter) / (float)uni;
+}
+
+float cwd::hamming(string& a, string& b)
+{
+	if (a == "" || b == "")
+	{
+		return 0.0f;
+	}
+	if (a.length() != b.length())
+	{
+		return 0.0f;
+	}
+
+	int disCount = 0;
+	for (int i = 0; i < a.length(); i++)
+	{
+		if (a.at(i) != b.at(i))
+		{
+			disCount++;
+		}
+	}
+	return (float)disCount / (float)a.length();
 }

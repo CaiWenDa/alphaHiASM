@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 	//{
 	//    return 0;
 	//}
-	//string seqFileName = "/home/caiwenda/software/LROD/test/long_read.fa";
+	//string seqFileName = "/home/caiwenda/dmel_hifi_40x.fasta";
 	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
 	string seqFileName = "/publicdata_two/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
@@ -19,14 +19,16 @@ int main(int argc, char* argv[])
 	// cout << "frequencyFile : " << kfFileName << endl;
 	seqData_t seq;
 	StringSet<CharString> ID;
+	clock_t start = clock();
 	loadSeqData(seqFileName, ID, seq);
 	kmerHashTable_t& kmerHashTable = createKmerHashTable(seq);
 	// filterKmer(kmerHashTable, kfFileName);
 	//cout << string{ begin(seq[6859]) + 5221, begin(seq[6859]) + 5221 +200 } << endl;
 	//cout << string{ begin(seq[1712]) + 21497, begin(seq[1712]) + 21497 + 200 } << endl;
-	//compSeqInRange(seq, 25, 9552, 5353, 12059, 8734, 15759, 300);
+	compSeqInRange(seq, 410, 1068, 4066, 24950, 7158, 28033, 3083, false);
 	mainProcess(kmerHashTable, seq, ID);
 	cout << "done!\n";
+	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	getchar();
 	return 0;
 }
