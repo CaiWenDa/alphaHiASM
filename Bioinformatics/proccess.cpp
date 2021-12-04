@@ -4,6 +4,7 @@ using namespace std;
 using namespace seqan;
 using namespace cwd;
 namespace cwd {
+	mutex fileMutex;
 	uint KMER_STEP = 1;
 	const int KMER_LIMIT = 51;
 	const int CHAIN_LEN = 2;
@@ -338,6 +339,7 @@ void cwd::outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t
 	{
 		if (ovl.EP1 - ovl.SP1 > minSize && ovl.EP2 - ovl.SP2 > minSize)
 		{
+			int j = length(seq[i]);
 			outFile << r << "," << i << ",";
 			outFile << ovl.orient << ",";
 			outFile << ovl.SP1 << ",";
@@ -348,11 +350,10 @@ void cwd::outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t
 	}
 }
 
-void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID)
+void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, int block1, int block2, ofstream& outFile)
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
-	ofstream outFile("result_sampled-" + getCurrentDate() + ".csv", ios_base::out);
-	for (uint r = 0; r < length(seq); r++)
+	for (uint r = block1; r < block2; r++)
 	{
 		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
 		auto kmerSet = findSameKmer(kmerHashTable, seq, r);
@@ -370,11 +371,12 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 				auto chain_v = chainFromStart(seq, *commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
 				if (chain_v.size() > 0)
 				{
+					lock_guard<mutex> lock(fileMutex);
 					outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600);
 				}
 			}
 		}
-		seqan::clear(seq[r]);
+		//seqan::clear(seq[r]);
 	}
 }
 

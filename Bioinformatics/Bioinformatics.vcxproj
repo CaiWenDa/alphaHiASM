@@ -94,6 +94,9 @@
       <CppLanguageStandard>c++17</CppLanguageStandard>
       <AdditionalIncludeDirectories>~/seqan/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <LibraryDependencies>pthread</LibraryDependencies>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>

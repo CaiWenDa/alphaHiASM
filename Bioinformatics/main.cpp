@@ -25,10 +25,31 @@ int main(int argc, char* argv[])
 	// filterKmer(kmerHashTable, kfFileName);
 	//cout << string{ begin(seq[6859]) + 5221, begin(seq[6859]) + 5221 +200 } << endl;
 	//cout << string{ begin(seq[1712]) + 21497, begin(seq[1712]) + 21497 + 200 } << endl;
-	compSeqInRange(seq, 410, 1068, 4066, 24950, 7158, 28033, 3083, false);
-	mainProcess(kmerHashTable, seq, ID);
+	//compSeqInRange(seq, 410, 1068, 4066, 24950, 7158, 28033, 3083, false);
+	int block1 = 0;
+	int block2 = 0;
+	int b_size = length(seq) / thread_i;
+	ofstream outFile("result_sampled-" + getCurrentDate() + ".csv", ios_base::out);
+	vector<thread> threadPool;
+	for (size_t i = 0; i < thread_i; i++)
+	{
+		block2 += b_size;
+		threadPool.push_back(thread(mainProcess, 
+			ref(kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile)));
+		block1 = block2;
+	}
+	if (length(seq) % thread_i != 0)
+	{
+		threadPool.push_back(thread(mainProcess, 
+			ref(kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile)));
+	}
+	for (auto& th : threadPool)
+	{
+		th.join();
+	}
 	cout << "done!\n";
 	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
+	outFile.close();
 	getchar();
 	return 0;
 }

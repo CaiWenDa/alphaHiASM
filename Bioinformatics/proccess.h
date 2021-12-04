@@ -15,10 +15,13 @@
 #include <random>
 #include <cstdlib>
 #include <ctime>
+#include <thread>
+#include <mutex>
 
 namespace cwd {
 	using namespace std;
 	const uint KMER_LEN = 31;
+	const int thread_i = 24;
 	template<typename T1, typename T2, typename T3 = std::hash<T1>>
 	using hash = std::unordered_multimap<T1, T2, T3>;
 	typedef struct {
@@ -106,7 +109,7 @@ namespace cwd {
 	seqData_t* loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
 	void outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, int block1, int block2, ofstream& outFile);
 	kmer_t revComp(const kmer_t& kmer);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
 	std::string getCurrentDate();
