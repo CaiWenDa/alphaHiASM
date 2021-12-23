@@ -3,12 +3,17 @@
 using namespace std;
 using namespace seqan;
 using namespace cwd;
+void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
+
 namespace cwd {
 	mutex fileMutex;
 	uint KMER_STEP = 1;
 	const int KMER_LIMIT = 51;
 	const int CHAIN_LEN = 2;
 	const alignInfo_t& F_END = { 0, numeric_limits<uint>::max(), numeric_limits<uint>::max() };
+	vector<shared_ptr<list<assemblyInfo_t>>> assemblyChain;
+	vector<shared_ptr<AGraph>> assemblyGraph;
+	vector<assemblyInfo_t> overlap;
 }
 
 kmerHashTable_t& cwd::createKmerHashTable(const seqData_t& seq)
@@ -36,7 +41,7 @@ kmerHashTable_t& cwd::createKmerHashTable(const seqData_t& seq)
 
 vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t)
 {
-	shared_ptr<list<alignInfo_t>> chain( new list<alignInfo_t>() );
+	shared_ptr<list<alignInfo_t>> chain = make_shared<list<alignInfo_t>>();
 	vector<decltype(chain)> chain_v;
 	// chain->push_back(CKS.begin()->second);
 	vector<alignInfo_t> cks;
@@ -46,6 +51,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<k
 	{
 		cks.push_back(kmer.second);
 	}
+	CKS.clear();
 	sort(cks.begin(), cks.end(), [](alignInfo_t& a, alignInfo_t& b) { return a.SP1 < b.SP1; });
 	chain->push_back(*cks.begin());
 	for (auto ix = cks.begin(), nextx = next(ix); ix != cks.end() && nextx != cks.end();)
@@ -90,7 +96,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<k
 						if (chain->size() > CHAIN_LEN)
 						{
 							chain_v.push_back(chain);
-							chain = decltype(chain)( new list<alignInfo_t> () );
+							chain = make_shared<list<alignInfo_t>>();
 							//chain->push_back(F_END);
 							//iend = prev(chain->end());
 							chain->push_back(*nextx);
@@ -108,7 +114,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<k
 				if (chain->size() > CHAIN_LEN)
 				{
 					chain_v.push_back(chain);
-					chain = decltype(chain)(new list<alignInfo_t>());
+					chain = make_shared<list<alignInfo_t>>();
 					//chain->push_back(F_END);
 					//iend = prev(chain->end());
 					chain->push_back(*nextx);
@@ -125,7 +131,8 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, hash<k
 		{
 			if (chain->size() > CHAIN_LEN)
 				chain_v.push_back(chain);
-			chain = decltype(chain)(new list<alignInfo_t>());
+			chain = make_shared<list<alignInfo_t>>();
+			//chain = decltype(chain)(new list<alignInfo_t>());
 			//chain->push_back(F_END);//
 			//iend = prev(chain->end());
 			ix = nextx;
@@ -240,7 +247,7 @@ vector<overlapInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& c
 unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r)
 {
 	//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
-	unique_ptr<cwd::hash<uint, alignInfo_t>> kmerSet( new cwd::hash<uint, alignInfo_t> ); //[length(seq)];
+	unique_ptr<cwd::hash<uint, alignInfo_t>> kmerSet = make_unique<cwd::hash<uint, alignInfo_t>>(); //[length(seq)];
 	auto& read1 = seq[r];
 	kmer_t kmer1;
 	for (auto i = begin(read1); i < end(read1) - KMER_LEN; i++)
@@ -284,10 +291,9 @@ unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(kmerHashTable_t& kmer
 	return kmerSet;
 }
 
-seqData_t* cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqData_t& seq)
+void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqData_t& seq)
 {
 	StringSet<CharString> id;
-	//seqData_t* seq = new StringSet<Dna5String>();
 	SeqFileIn seqFileIn(seqFileName.c_str());
 	cout << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
@@ -302,7 +308,6 @@ seqData_t* cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID
 	//	//appendValue(ID, split[1]);
 	//	dict << split[0] << " " << i++ << endl;
 	//}
-	return &seq;
 }
 
 void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
@@ -326,28 +331,19 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 	}
 }
 
-void cwd::outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize)
+void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize)
 {
-	//cout << "seq: " << r << " and: " << i << " ";
-	//cout << " has OVERLAP! " << endl;
 	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]));
-	//cout << ovl.SP1 << " , ";
-	//cout << ovl.EP1 << " , ";
-	//cout << ovl.SP2 << " , ";
-	//cout << ovl.EP2 << endl;
-	for (auto& ovl : v_ovl)
-	{
-		if (ovl.EP1 - ovl.SP1 > minSize && ovl.EP2 - ovl.SP2 > minSize)
-		{
-			int j = length(seq[i]);
-			outFile << r << "," << i << ",";
-			outFile << ovl.orient << ",";
-			outFile << ovl.SP1 << ",";
-			outFile << ovl.EP1 << ",";
-			outFile << ovl.SP2 << ",";
-			outFile << ovl.EP2 << "," << length(seq[r]) << "," << length(seq[i]) << endl;
-		}
-	}
+
+	//outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u\n")
+	//	% r % i % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[r]) % length(seq[i]);
+	
+	vector<assemblyInfo_t> v_ass;
+	transform(v_ovl.begin(), v_ovl.end(), back_inserter(v_ass),
+			[=](overlapInfo_t& a) {
+				return assemblyInfo_t{ r, i, a.SP1, a.EP1, a.SP2, a.EP2, a.orient };
+			});
+	overlap.insert(overlap.end(), v_ass.begin(), v_ass.end());
 }
 
 void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, int block1, int block2, ofstream& outFile)
@@ -378,6 +374,66 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		}
 		//seqan::clear(seq[r]);
 	}
+	//std::sort(info.begin(), info.end(), 
+	//	[](assemblyInfo_t& a, assemblyInfo_t& b)
+	//	{
+	//		if (a.r1 < b.r1)
+	//		{
+	//			return true;
+	//		}
+	//		else if (a.r1 == b.r1)
+	//		{
+	//			return (a.r2 < b.r2);
+	//		}
+	//		else
+	//		{
+	//			return false;
+	//		}
+	//	});
+	//assembler();
+}
+
+void cwd::assembler()
+{
+	ofstream outAssembly("toyAssembly.csv");
+	for (auto& chain : assemblyChain)
+	{
+		if (chain->size() < 3)
+		{
+			continue;
+		}
+		Dna5String newRead;
+		for (auto& ovl : *chain)
+		{
+			outAssembly << boost::format("%u, %u, %u, %u, %u, %u\n") 
+				% ovl.r1 % ovl.r2 % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2;
+			//int len1 = length(seq[ovl.r1]);
+			//int len2 = length(seq[ovl.r2]);
+			//if (ovl.orient)
+			//{
+			//	string newRead1 = { begin(seq[ovl.r1]), begin(seq[ovl.r1]) + ovl.EP1 };
+			//	string newRead2 = { begin(seq[ovl.r2]) + ovl.EP2, end(seq[ovl.r2]) };
+			//	newRead += newRead1 + newRead2;
+			//}
+			//else
+			//{
+			//	string newRead1 = { begin(seq[ovl.r2]), begin(seq[ovl.r2]) + ovl.EP2 };
+			//	string newRead2 = { begin(seq[ovl.r1]) + ovl.EP1, end(seq[ovl.r1]) };
+			//	newRead += newRead1 + newRead2;
+			//}
+		}
+		//cout << "--------------------------------------------------------------\n";
+		outAssembly << endl;
+	}
+	outAssembly.close();
+
+	outAssembly.open("toyAssembly_graph.txt");
+	for (auto& aGraph : assemblyGraph)
+	{
+		boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)));
+		outAssembly << endl;
+	}
+	outAssembly.close();
 }
 
 kmer_t cwd::revComp(const kmer_t& kmer)
@@ -508,4 +564,141 @@ float cwd::hamming(string& a, string& b)
 		}
 	}
 	return (float)disCount / (float)a.length();
+}
+
+void cwd::toyAssembly(seqData_t& seq)
+{
+	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
+	vertex_descriptor src, dst;
+	for (auto& ovl : overlap)
+	{
+		if (ovl.EP1 - ovl.SP1 > 600 && ovl.EP2 - ovl.SP2 > 600)
+		{
+			//int j = length(seq[i]);
+			bool flag = false;
+			uint r = ovl.r1;
+			uint i = ovl.r2;
+			bool isSE = false, isES = false;
+			if (
+				(isES = (length(seq[r]) - ovl.EP1 < 100 && ovl.SP2 < 100 && ovl.orient)) ||
+				(isSE = (length(seq[i]) - ovl.EP2 < 100 && ovl.SP1 < 100 && ovl.orient)) ||
+				(isES = (length(seq[r]) - ovl.EP1 < 100 && ovl.EP2 < 100 && !ovl.orient)) ||
+				(isSE = (length(seq[i]) - ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient))
+				) //TODO direction
+			{
+				for (auto& chain : assemblyChain)
+				{
+					auto ix = find_if(chain->begin(), chain->end(), 
+							[=](assemblyInfo_t& a) {
+								return a.r1 == r || a.r1 == i || a.r2 == r || a.r2 == i;
+							});
+					if (ix != chain->end())
+					{
+						//chain->push_back(ovl);
+						flag = true;
+						chain->insert(next(ix), ovl);
+						//break;
+					}
+					//if (chain->rbegin()->r1 == r || chain->rbegin()->r1 == i)
+					//{
+					//	chain->push_back({ r, i, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
+					//	flag = true;
+					//	break;
+					//}
+					//else if (chain->rbegin()->r2 == r || chain->rbegin()->r2 == i)
+					//{
+					//	chain->push_back({ i, r, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
+					//	flag = true;
+					//	break;
+					//}
+				}
+				if (!flag)
+				{
+					auto n_chain = make_shared<list<assemblyInfo_t>>();
+					n_chain->push_back(ovl);
+					assemblyChain.push_back(n_chain);
+				}
+
+				for (auto& aGraph : assemblyGraph)
+				{
+					boost::graph_traits<AGraph>::vertex_iterator vi, vi_end;
+					boost::tie(vi, vi_end) = boost::vertices(*aGraph);
+					auto prop = boost::get(vertex_property_t(), *aGraph);
+					auto vx = find_if(vi, vi_end,
+						[=](vertex_descriptor ix) {
+							AVertex y = prop[ix];
+							return y.r == r || y.r == i;
+					});
+					if (vx != vi_end)
+					{
+						flag = true;
+						AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
+						AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
+
+						if (prop[*vx].r == i)
+						{
+							auto vx2 = find_if(vi, vi_end,
+								[=](vertex_descriptor ix) {
+								AVertex y = prop[ix];
+								return y.r == r;
+							});
+							if (vx2 != vi_end)
+							{
+								boost::add_edge(*vx, *vx2, 1, *aGraph);
+							}
+							else
+							{
+								src = boost::add_vertex(v, *aGraph);
+								if (isES)
+								{
+									boost::add_edge(*vx, src, 1, *aGraph);
+								}
+								else
+								{
+									boost::add_edge(src, *vx, 1, *aGraph);
+								}
+								//TODO: condition of direction
+							}
+						}
+						else
+						{
+							auto vx2 = find_if(vi, vi_end,
+								[=](vertex_descriptor ix) {
+								AVertex y = prop[ix];
+								return y.r == i;
+							});
+							if (vx2 != vi_end)
+							{
+								boost::add_edge(*vx, *vx2, 1, *aGraph);
+							}
+							else
+							{
+								dst = boost::add_vertex(v2, *aGraph);
+								if (isES)
+								{
+									boost::add_edge(*vx, dst, 1, *aGraph);
+								}
+								else
+								{
+									boost::add_edge(dst, *vx, 1, *aGraph);
+								}
+								//TODO: condition of direction
+							}
+						}
+					}
+				}
+				if (!flag)
+				{
+					auto aGraph = make_shared<AGraph>();
+					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
+					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
+					src = boost::add_vertex(v, *aGraph);
+					dst = boost::add_vertex(v2, *aGraph);
+					boost::add_edge(src, dst, 1, *aGraph);
+					assemblyGraph.push_back(aGraph);
+				}
+			}
+		}
+
+	}
 }

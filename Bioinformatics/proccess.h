@@ -17,6 +17,11 @@
 #include <ctime>
 #include <thread>
 #include <mutex>
+#include "boost/graph/adjacency_list.hpp"
+#include "boost/graph/properties.hpp"
+#include "boost/property_map/property_map.hpp"
+#include "boost/graph/graphviz.hpp"
+#include "boost/format.hpp"
 
 namespace cwd {
 	using namespace std;
@@ -69,6 +74,34 @@ namespace cwd {
 		uint SP2;
 	} alignInfo_t;
 
+	typedef struct assemblyInfo_t {
+		uint r1, r2;
+		uint SP1;
+		uint EP1;
+		uint SP2;
+		uint EP2;
+		bool orient = true;
+	} assemblyInfo_t;
+
+	typedef struct AVertex {
+		uint r;
+		uint SP;
+		uint EP;
+		bool orient = true;
+
+		friend ostream & operator<<(ostream& out, const AVertex& v)
+		{
+			out << v.r;
+			return out;
+		}
+	} AVertex;
+
+	struct vertex_property_t {
+		typedef boost::vertex_property_tag kind;
+	};
+
+	using AGraph = boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, boost::property<vertex_property_t, AVertex>, uint>;
+
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
 	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t);
 	vector<overlapInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2);
@@ -106,13 +139,15 @@ namespace cwd {
 		return commonKmerSet;
 	}
 
-	seqData_t* loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
+	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(uint r, uint & i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
+	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, int block1, int block2, ofstream& outFile);
+	void assembler();
 	kmer_t revComp(const kmer_t& kmer);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
 	std::string getCurrentDate();
 	float jaccard(string& a, string& b);
 	float hamming(string& a, string& b);
+	void toyAssembly(seqData_t& seq);
 }

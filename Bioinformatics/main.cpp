@@ -1,6 +1,6 @@
 ﻿#include "proccess.h"
 
-void compSeqInRange(cwd::seqData_t seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
+void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
 
 int main(int argc, char* argv[])
 {
@@ -11,9 +11,9 @@ int main(int argc, char* argv[])
 	//{
 	//    return 0;
 	//}
-	//string seqFileName = "/home/caiwenda/dmel_hifi_40x.fasta";
+	string seqFileName = "/home/caiwenda/dataset/dmel_hifi_40x_sample.fasta";
 	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
-	string seqFileName = "/publicdata_two/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
+	//string seqFileName = "/publicdata_two/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
 	cout << "seqFile : " << seqFileName << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
@@ -29,8 +29,10 @@ int main(int argc, char* argv[])
 	int block1 = 0;
 	int block2 = 0;
 	int b_size = length(seq) / thread_i;
-	ofstream outFile("result_sampled-" + getCurrentDate() + ".csv", ios_base::out);
+	//ofstream outFile("result_sampled-" + getCurrentDate() + ".csv", ios_base::out);
+	ofstream outFile;
 	vector<thread> threadPool;
+	cout << "Detecting...\n";
 	for (size_t i = 0; i < thread_i; i++)
 	{
 		block2 += b_size;
@@ -47,6 +49,9 @@ int main(int argc, char* argv[])
 	{
 		th.join();
 	}
+
+	toyAssembly(seq);
+	assembler();
 	cout << "done!\n";
 	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	outFile.close();
@@ -54,7 +59,7 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-void compSeqInRange(cwd::seqData_t seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient)
+void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient)
 {
 	using namespace std;
 	if (!orient)

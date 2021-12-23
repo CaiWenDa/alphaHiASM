@@ -76,7 +76,7 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>/usr/include;/usr/local/include;/usr/lib/gcc/x86_64-linux-gnu/9/include;/usr/include/x86_64-linux-gnu;/home/caiwenda/seqan/include</IncludePath>
+    <IncludePath>/usr/include;/usr/local/include;/usr/lib/gcc/x86_64-linux-gnu/9/include;/usr/include/x86_64-linux-gnu;/home/caiwenda/seqan/include;/home/caiwenda/boost</IncludePath>
     <TargetExt>.</TargetExt>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
@@ -92,7 +92,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <CppLanguageStandard>c++17</CppLanguageStandard>
-      <AdditionalIncludeDirectories>~/seqan/include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>~/seqan/include;~/boost;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <LibraryDependencies>pthread</LibraryDependencies>
