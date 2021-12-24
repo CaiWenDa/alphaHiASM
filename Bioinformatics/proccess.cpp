@@ -582,8 +582,8 @@ void cwd::toyAssembly(seqData_t& seq)
 			if (
 				(isES = (length(seq[r]) - ovl.EP1 < 100 && ovl.SP2 < 100 && ovl.orient)) ||
 				(isSE = (length(seq[i]) - ovl.EP2 < 100 && ovl.SP1 < 100 && ovl.orient)) ||
-				(isES = (length(seq[r]) - ovl.EP1 < 100 && ovl.EP2 < 100 && !ovl.orient)) ||
-				(isSE = (length(seq[i]) - ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient))
+				(isES = (length(seq[r]) - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient)) ||
+				(isSE = (ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient))
 				) //TODO direction
 			{
 				for (auto& chain : assemblyChain)
@@ -634,7 +634,6 @@ void cwd::toyAssembly(seqData_t& seq)
 						flag = true;
 						AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
 						AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
-
 						if (prop[*vx].r == i)
 						{
 							auto vx2 = find_if(vi, vi_end,
@@ -651,11 +650,11 @@ void cwd::toyAssembly(seqData_t& seq)
 								src = boost::add_vertex(v, *aGraph);
 								if (isES)
 								{
-									boost::add_edge(*vx, src, 1, *aGraph);
+									boost::add_edge(src, *vx, 1, *aGraph);
 								}
 								else
 								{
-									boost::add_edge(src, *vx, 1, *aGraph);
+									boost::add_edge(*vx, src, 1, *aGraph);
 								}
 								//TODO: condition of direction
 							}
@@ -694,7 +693,14 @@ void cwd::toyAssembly(seqData_t& seq)
 					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
 					src = boost::add_vertex(v, *aGraph);
 					dst = boost::add_vertex(v2, *aGraph);
-					boost::add_edge(src, dst, 1, *aGraph);
+					if (isES)
+					{
+						boost::add_edge(src, dst, 1, *aGraph);
+					}
+					else
+					{
+						boost::add_edge(dst, src, 1, *aGraph);
+					}
 					assemblyGraph.push_back(aGraph);
 				}
 			}

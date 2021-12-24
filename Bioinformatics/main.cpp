@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 	//{
 	//    return 0;
 	//}
-	string seqFileName = "/home/caiwenda/dataset/dmel_hifi_40x_sample.fasta";
+	string seqFileName = "/home/caiwenda/dmel_hifi_40x_sample.fasta";
 	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
 	//string seqFileName = "/publicdata_two/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
