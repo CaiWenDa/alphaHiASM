@@ -96,11 +96,48 @@ namespace cwd {
 		}
 	} AVertex;
 
+	typedef struct AEdge {
+		enum Adj
+		{
+			HeadHead, HeadTail, TailHead, TailTail
+		} adj;
+
+		friend ostream& operator<<(ostream& out, const AEdge& e)
+		{
+			out << bitset<2>(e.adj);
+			return out;
+		}
+	} AEdge;
+
 	struct vertex_property_t {
 		typedef boost::vertex_property_tag kind;
 	};
 
-	using AGraph = boost::adjacency_list<boost::vecS, boost::vecS, boost::directedS, boost::property<vertex_property_t, AVertex>, uint>;
+	struct edge_property_t {
+		typedef boost::edge_property_tag kind;
+	};
+
+	template <class WeightMap>
+	class edge_writer
+	{
+	public:
+		edge_writer(WeightMap w) : wm(w) {}
+
+		template <class Edge>
+		void operator()(ostream& out, const Edge& e) const {
+			out << "[label=\"" << wm[e] << "\"]";
+		}
+	private:
+		WeightMap wm;
+	};
+
+	template <class WeightMap>
+	inline edge_writer<WeightMap> make_edge_writer(WeightMap w)
+	{
+		return edge_writer<WeightMap>(w);
+	}
+
+	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::undirectedS, boost::property<vertex_property_t, AVertex>, boost::property<edge_property_t, AEdge>>;
 
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
 	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t);

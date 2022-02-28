@@ -430,7 +430,13 @@ void cwd::assembler()
 	outAssembly.open("toyAssembly_graph.txt");
 	for (auto& aGraph : assemblyGraph)
 	{
-		boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)));
+		boost::dynamic_properties dp;
+		//dp.property("node_id", boost::get(&AVertex::r, *aGraph));
+		//dp.property("label", boost::get(vertex_property_t(), *aGraph));
+		//dp.property("label", boost::get(edge_property_t(), *aGraph));
+		//boost::write_graphviz(outAssembly, *aGraph, dp);
+		boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)),
+			make_edge_writer(boost::get(edge_property_t(), *aGraph)));
 		outAssembly << endl;
 	}
 	outAssembly.close();
@@ -578,12 +584,14 @@ void cwd::toyAssembly(seqData_t& seq)
 			bool flag = false;
 			uint r = ovl.r1;
 			uint i = ovl.r2;
-			bool isSE = false, isES = false;
+			bool isHeadTail = false, isTailHead = false, isHeadHead = false, isTailTail = false;
 			if (
-				(isES = (length(seq[r]) - ovl.EP1 < 100 && ovl.SP2 < 100 && ovl.orient)) ||
-				(isSE = (length(seq[i]) - ovl.EP2 < 100 && ovl.SP1 < 100 && ovl.orient)) ||
-				(isES = (length(seq[r]) - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient)) ||
-				(isSE = (ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient))
+				(isTailHead = (length(seq[r]) - ovl.EP1 < 100 && ovl.SP2 < 100 && ovl.orient)) ||
+				(isHeadTail = (length(seq[i]) - ovl.EP2 < 100 && ovl.SP1 < 100 && ovl.orient)) ||
+				(isTailHead = (length(seq[r]) - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient)) ||
+				(isHeadTail = (ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient)) ||
+				(isHeadHead = (ovl.SP1 < 100 && ovl.SP2 < 100 && !ovl.orient)) ||
+				(isTailTail = (length(seq[r]) - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient))
 				) //TODO direction
 			{
 				for (auto& chain : assemblyChain)
@@ -643,18 +651,30 @@ void cwd::toyAssembly(seqData_t& seq)
 							});
 							if (vx2 != vi_end)
 							{
-								boost::add_edge(*vx, *vx2, 1, *aGraph);
+								boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail }, *aGraph);
 							}
 							else
 							{
 								src = boost::add_vertex(v, *aGraph);
-								if (isES)
+								if (isHeadTail)
 								{
-									boost::add_edge(src, *vx, 1, *aGraph);
+									boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail }, *aGraph);
+								}
+								else if (isHeadHead)
+								{
+									boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead }, *aGraph);
+								}
+								else if (isTailHead)
+								{
+									boost::add_edge(src, *vx, AEdge{ AEdge::TailHead }, *aGraph);
+								}
+								else if (isTailTail)
+								{
+									boost::add_edge(src, *vx, AEdge{ AEdge::TailTail }, *aGraph);
 								}
 								else
 								{
-									boost::add_edge(*vx, src, 1, *aGraph);
+									cout << "none\n";
 								}
 								//TODO: condition of direction
 							}
@@ -668,18 +688,30 @@ void cwd::toyAssembly(seqData_t& seq)
 							});
 							if (vx2 != vi_end)
 							{
-								boost::add_edge(*vx, *vx2, 1, *aGraph);
+								boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail }, *aGraph);
 							}
 							else
 							{
 								dst = boost::add_vertex(v2, *aGraph);
-								if (isES)
+								if (isTailHead)
 								{
-									boost::add_edge(*vx, dst, 1, *aGraph);
+									boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead }, *aGraph);
+								}
+								else if (isHeadTail)
+								{
+									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail }, *aGraph);
+								}
+								else if (isHeadHead)
+								{
+									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead }, *aGraph);
+								}
+								else if (isTailTail)
+								{
+									boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail }, *aGraph);
 								}
 								else
 								{
-									boost::add_edge(dst, *vx, 1, *aGraph);
+									cout << "none\n";
 								}
 								//TODO: condition of direction
 							}
@@ -693,13 +725,13 @@ void cwd::toyAssembly(seqData_t& seq)
 					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
 					src = boost::add_vertex(v, *aGraph);
 					dst = boost::add_vertex(v2, *aGraph);
-					if (isES)
+					if (isTailHead)
 					{
-						boost::add_edge(src, dst, 1, *aGraph);
+						boost::add_edge(src, dst, {}, * aGraph);
 					}
 					else
 					{
-						boost::add_edge(dst, src, 1, *aGraph);
+						boost::add_edge(dst, src, {}, * aGraph);
 					}
 					assemblyGraph.push_back(aGraph);
 				}
