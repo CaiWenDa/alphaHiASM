@@ -1,4 +1,5 @@
 #include "proccess.h"
+#include "assembler.hpp"
 
 using namespace std;
 using namespace seqan;
@@ -393,7 +394,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 	//assembler();
 }
 
-void cwd::assembler()
+void cwd::assembler(const seqData_t& seq)
 {
 	ofstream outAssembly("toyAssembly.csv");
 	for (auto& chain : assemblyChain)
@@ -402,44 +403,35 @@ void cwd::assembler()
 		{
 			continue;
 		}
-		Dna5String newRead;
 		for (auto& ovl : *chain)
 		{
 			outAssembly << boost::format("%u, %u, %u, %u, %u, %u\n") 
 				% ovl.r1 % ovl.r2 % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2;
-			//int len1 = length(seq[ovl.r1]);
-			//int len2 = length(seq[ovl.r2]);
-			//if (ovl.orient)
-			//{
-			//	string newRead1 = { begin(seq[ovl.r1]), begin(seq[ovl.r1]) + ovl.EP1 };
-			//	string newRead2 = { begin(seq[ovl.r2]) + ovl.EP2, end(seq[ovl.r2]) };
-			//	newRead += newRead1 + newRead2;
-			//}
-			//else
-			//{
-			//	string newRead1 = { begin(seq[ovl.r2]), begin(seq[ovl.r2]) + ovl.EP2 };
-			//	string newRead2 = { begin(seq[ovl.r1]) + ovl.EP1, end(seq[ovl.r1]) };
-			//	newRead += newRead1 + newRead2;
-			//}
+			
 		}
 		//cout << "--------------------------------------------------------------\n";
 		outAssembly << endl;
 	}
 	outAssembly.close();
 
-	outAssembly.open("toyAssembly_graph.txt");
+	//outAssembly.open("toyAssembly_graph.txt");
+	outAssembly.open("toyAssembly_path.txt");
+	int i = 0;
 	for (auto& aGraph : assemblyGraph)
 	{
-		boost::dynamic_properties dp;
-		//dp.property("node_id", boost::get(&AVertex::r, *aGraph));
-		//dp.property("label", boost::get(vertex_property_t(), *aGraph));
-		//dp.property("label", boost::get(edge_property_t(), *aGraph));
-		//boost::write_graphviz(outAssembly, *aGraph, dp);
-		boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)),
-			make_edge_writer(boost::get(edge_property_t(), *aGraph)));
-		outAssembly << endl;
+	//	boost::dynamic_properties dp;
+	//	//dp.property("node_id", boost::get(&AVertex::r, *aGraph));
+	//	//dp.property("label", boost::get(vertex_property_t(), *aGraph));
+	//	//dp.property("label", boost::get(edge_property_t(), *aGraph));
+	//	//boost::write_graphviz(outAssembly, *aGraph, dp);
+		//boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)),
+		//	make_edge_writer(boost::get(&AEdge::adj, *aGraph)));
+		//outAssembly << endl;
+		outAssembly << "Graph: " << i++;
+		findPath(*aGraph, seq, outAssembly);
 	}
 	outAssembly.close();
+
 }
 
 kmer_t cwd::revComp(const kmer_t& kmer)
@@ -651,26 +643,26 @@ void cwd::toyAssembly(seqData_t& seq)
 							});
 							if (vx2 != vi_end)
 							{
-								boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail }, *aGraph);
+								//boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 							}
 							else
 							{
 								src = boost::add_vertex(v, *aGraph);
 								if (isHeadTail)
 								{
-									boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail }, *aGraph);
+									boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 								}
 								else if (isHeadHead)
 								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead }, *aGraph);
+									boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
 								}
 								else if (isTailHead)
 								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::TailHead }, *aGraph);
+									boost::add_edge(src, *vx, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 								}
 								else if (isTailTail)
 								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::TailTail }, *aGraph);
+									boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
 								}
 								else
 								{
@@ -688,26 +680,26 @@ void cwd::toyAssembly(seqData_t& seq)
 							});
 							if (vx2 != vi_end)
 							{
-								boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail }, *aGraph);
+								//boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 							}
 							else
 							{
 								dst = boost::add_vertex(v2, *aGraph);
 								if (isTailHead)
 								{
-									boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead }, *aGraph);
+									boost::add_edge(*vx, dst, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 								}
 								else if (isHeadTail)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail }, *aGraph);
+									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
 								}
 								else if (isHeadHead)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead }, *aGraph);
+									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
 								}
 								else if (isTailTail)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail }, *aGraph);
+									boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
 								}
 								else
 								{
@@ -727,11 +719,23 @@ void cwd::toyAssembly(seqData_t& seq)
 					dst = boost::add_vertex(v2, *aGraph);
 					if (isTailHead)
 					{
-						boost::add_edge(src, dst, {}, * aGraph);
+						boost::add_edge(src, dst, AEdge{ AEdge::TailHead, ovl, -1 }, * aGraph);
+					}
+					else if (isHeadTail)
+					{
+						boost::add_edge(dst, src, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
+					}
+					else if (isHeadHead)
+					{
+						boost::add_edge(dst, src, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
+					}
+					else if (isTailTail)
+					{
+						boost::add_edge(dst, src, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
 					}
 					else
 					{
-						boost::add_edge(dst, src, {}, * aGraph);
+						cout << "none\n";
 					}
 					assemblyGraph.push_back(aGraph);
 				}

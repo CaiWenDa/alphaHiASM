@@ -102,11 +102,15 @@ namespace cwd {
 			HeadHead, HeadTail, TailHead, TailTail
 		} adj;
 
+		assemblyInfo_t ovl;
+		int weight = -1;
+
 		friend ostream& operator<<(ostream& out, const AEdge& e)
 		{
 			out << bitset<2>(e.adj);
 			return out;
 		}
+
 	} AEdge;
 
 	struct vertex_property_t {
@@ -125,7 +129,7 @@ namespace cwd {
 
 		template <class Edge>
 		void operator()(ostream& out, const Edge& e) const {
-			out << "[label=\"" << wm[e] << "\"]";
+			out << "[label=\"" << bitset<2>(wm[e]) << "\"]";
 		}
 	private:
 		WeightMap wm;
@@ -137,7 +141,7 @@ namespace cwd {
 		return edge_writer<WeightMap>(w);
 	}
 
-	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::undirectedS, boost::property<vertex_property_t, AVertex>, boost::property<edge_property_t, AEdge>>;
+	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::directedS, boost::property<vertex_property_t, AVertex>, AEdge>;
 
 	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
 	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t);
@@ -180,7 +184,7 @@ namespace cwd {
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
 	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, int block1, int block2, ofstream& outFile);
-	void assembler();
+	void assembler(const seqData_t& seq);
 	kmer_t revComp(const kmer_t& kmer);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
 	std::string getCurrentDate();

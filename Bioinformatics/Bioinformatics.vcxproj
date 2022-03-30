@@ -87,6 +87,7 @@
     <ClCompile Include="proccess.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="assembler.hpp" />
     <ClInclude Include="proccess.h" />
   </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

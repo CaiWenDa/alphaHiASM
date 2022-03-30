@@ -11,9 +11,9 @@ int main(int argc, char* argv[])
 	//{
 	//    return 0;
 	//}
-	//string seqFileName = "/home/caiwenda/dmel_hifi_40x_sample.fasta";
+	string seqFileName = "/home/caiwenda/dmel_hifi_40x_sample.fasta";
 	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
-	string seqFileName = "/public_data/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
+	//string seqFileName = "/public_data/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_40x_sample.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
 	cout << "seqFile : " << seqFileName << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
 	}
 
 	toyAssembly(seq);
-	assembler();
+	assembler(seq);
 	cout << "done!\n";
 	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	outFile.close();
