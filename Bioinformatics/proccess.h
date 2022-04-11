@@ -143,17 +143,17 @@ namespace cwd {
 
 	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::directedS, boost::property<vertex_property_t, AVertex>, AEdge>;
 
-	kmerHashTable_t& createKmerHashTable(const seqData_t& seq);
-	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, hash<kmer_t, alignInfo_t>& CKS, int k, int ks, int alpha, int beta, double gamma, int r, int t);
-	vector<overlapInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2);
+	kmerHashTable_t* createKmerHashTable(const seqData_t& seq);
+	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
+	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2, uint r, uint i);
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
 	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
 
 	template<typename T, typename R>
-	unique_ptr<hash<kmer_t, alignInfo_t>> getCommonKmerSet(T range, R read)
+	vector<alignInfo_t> getCommonKmerSet(T range, R read)
 	{
-
-		unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );
+		vector<alignInfo_t> cks;
+		//unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );
 		std::set<kmer_t> keySet;
 		while (range.first != range.second)
 		{
@@ -161,23 +161,28 @@ namespace cwd {
 			uint startPos2 = (range.first->second).SP2;
 			bool orient = range.first->second.orient;
 			kmer_t kmer = { seqan::begin(read) + startPos1, seqan::begin(read) + startPos1 + KMER_LEN };
-			commonKmerSet->insert({ kmer, {orient, startPos1, startPos2} });
-			keySet.insert(kmer);
+			if (keySet.insert(kmer).second)
+			{
+				//commonKmerSet->insert({ kmer, {orient, startPos1, startPos2} });
+				cks.push_back({ orient, startPos1, startPos2 });
+			}
 			++range.first;
 		}
-		for (auto kmer : keySet)
-		{
-			if (commonKmerSet->count(kmer) > 1)
-			{
-				commonKmerSet->erase(kmer);
-			}
-		}
-		//int num = count_if(commonKmerSet->begin(), commonKmerSet->end(), [](decltype(*commonKmerSet->begin())& a) {return a.second.orient == true;	});
-		//for (auto& x : *commonKmerSet)
+		//for (auto kmer : keySet)
 		//{
-		//	x.second.orient = num > commonKmerSet->size() / 2 ? true : false;
+		//	if (commonKmerSet->count(kmer) > 1)
+		//	{
+		//		commonKmerSet->erase(kmer);
+		//	}
 		//}
-		return commonKmerSet;
+		//auto iend = chain->begin();
+		// cout << CKS.size();
+		//for (auto& kmer : commonKmerSet)
+		//{
+		//	cks.push_back(kmer.second);
+		//}
+
+		return cks;
 	}
 
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
@@ -190,5 +195,5 @@ namespace cwd {
 	std::string getCurrentDate();
 	float jaccard(string& a, string& b);
 	float hamming(string& a, string& b);
-	void toyAssembly(seqData_t& seq);
+	void toyAssembly(seqData_t& seq, int block1, int block2);
 }

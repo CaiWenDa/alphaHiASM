@@ -11,6 +11,8 @@ namespace cwd
 	using edge_descriptor = boost::graph_traits<AGraph>::edge_descriptor;
 	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, int adj);
+
+	void generateContig(const cwd::AGraph& g, std::vector<int>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id);
 	
 	void compSeqInRange(const seqan::Dna5String & r1, const seqan::Dna5String & r2, int r, uint start1, uint start2, uint end1, uint end2, uint len, bool orient)
 	{
@@ -41,31 +43,6 @@ namespace cwd
 				cout << "..." + string{ end(r2) - 30,  end(r2) } << endl;
 			}
 
-		}
-	}
-	void printPath(vector<int>& distance, vector<int>& path, int n, int start)
-	{
-		for (auto i = 0; i < n; i++)
-		{
-			vector<int> p;
-			p.push_back(i);
-			for (auto s = i; s != start; s = path[s])
-			{
-				if (s == -1)
-				{
-					break;
-				}
-				p.push_back(s);
-			}
-			if (p.size() == 1)
-			{
-				p.push_back(i);
-			}
-			for (auto i = p.rbegin(); i != p.rend(); i++)
-			{
-				cout << *i << " -> ";
-			}
-			cout << endl;
 		}
 	}
 
@@ -124,14 +101,13 @@ namespace cwd
 	//	}
 	//}
 
-	void findPath(const AGraph& g, const seqData_t& seq, ofstream & outAssembly)
+	vector<int> findPath(const AGraph& g, const seqData_t& seq, ofstream & outAssembly)
 	{
 		using namespace boost;
 		vertex_iterator vi, vend;
 		tie(vi, vend) = vertices(g);
 		uint len = std::distance(vi, vend);
 		auto e_prop = boost::get(&AEdge::weight, g);
-		auto v_prop = boost::get(vertex_property_t(), g);
 		using weightMap = decltype(e_prop);
 		int n = num_vertices(g);
 		edge_iterator e, eend;
@@ -140,13 +116,14 @@ namespace cwd
 		vector<int> v_dis(n, numeric_limits<short>::max());
 		v_dis[0] = 0;
 		vector<int> path(n, -1);
+		vector<int> p;
+
 		for (int i = 0; i < n; ++i)
 			path[i] = i;
 		bool r = boost::bellman_ford_shortest_paths(g, n, e_prop, &path[0], &v_dis[0],
 			boost::closed_plus<int>(), std::less<int>(), default_bellman_visitor());
 		int tar = std::distance(v_dis.begin(), 
 			std::min_element(std::next(v_dis.begin()), v_dis.end()));
-		ofstream seqOut("result.txt", ios_base::app);
 		if (r)
 		{
 			//copy(v_dis.begin(), v_dis.end(), ostream_iterator<int, char>(cout, " "));
@@ -155,7 +132,6 @@ namespace cwd
 			//cout << endl;
 			outAssembly << " Vn: " << n << ", path: ";
 			int s;
-			vector<int> p;
 			p.push_back(tar);
 			for (s = path[tar]; s != path[s] && s != tar; s = path[s])
 			{
@@ -168,81 +144,10 @@ namespace cwd
 			std::reverse(p.begin(), p.end());
 			copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outAssembly, " -> "));
 			outAssembly << *p.rbegin() << endl;
-			if (p.size() > 1)
-			{
-				auto assembly = seq[v_prop[p[0]].r];
-				auto E_ovl = get(&AEdge::ovl, g);
-				auto E_adj = get(&AEdge::adj, g);
-				for (auto i = p.begin(); /*false && */i != prev(p.end()); i++)
-				{
-					auto e = edge(*i, *std::next(i), g).first;
-					if (e.m_eproperty)
-					{
-						//outAssembly << "PRE:\n" << assembly << " " << endl;
-						//outAssembly << "NEWREAD:\n" << seq[v_prop[*i].r] << endl;
-						//outAssembly << "OVL:\n" << E_ovl[e].SP1 << " " 
-						//	<< E_ovl[e].SP2 << " " << E_ovl[e].EP1 << " " 
-						//	<< E_ovl[e].EP2 << endl;
-						//outAssembly << "ADJ:\n" << E_adj[e] << endl;
-						//cout << "ADJ: " << bitset<2>(E_adj[e]) << " orient: " << E_ovl[e].orient << endl;
-						if (v_prop[*i].r == E_ovl[e].r1)
-						{
-							//cout << "NEWREAD: SP1: " << E_ovl[e].SP1 << " EP1: " << E_ovl[e].EP1 
-							//	<< " SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2 
-							//	<< " LEN1: " << length(seq[v_prop[*i].r]) 
-							//	<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
-							//compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
-							//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-							//		  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-						}
-						else
-						{
-							//cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
-							//	<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
-							//	<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
-							//	<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
-
-							//compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
-							//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-							//		E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-						}
-						assembly = concatReads(assembly, v_prop[*std::next(i)].r,
-							seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
-						//cout << "RES:\n";
-						//cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
-						//outAssembly << "RES:\n" << assembly << endl;
-					}
-					else
-					{
-						continue;
-						//auto e = edge(*i, *std::next(i), g).first;
-						//if (e.m_eproperty)
-						//{
-						//	cout << "ADJ: " << E_adj[e] << endl;
-						//	cout << "NEWREAD:\n";
-						//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*std::next(i)].r,
-						//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-						//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-						//	assembly = concatReads(assembly, v_prop[*std::next(i)].r,
-						//		seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
-						//	cout << "RES:\n";
-						//	cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
-					}
-					seqOut << length(assembly) << endl;
-					auto a = begin(assembly);
-					for (auto b = next(a, 1000); b < end(assembly); std::advance(a, 1000), std::advance(b, 1000))
-					{
-						seqOut << string{ a, b } << endl;
-					}
-					seqOut << endl;
-				}
-				//cout << "total: " << length(assembly) << endl;
-			}
 		}
 		else
 			cout << "negative cycle." << endl;
-
-		//vector<vertex_descriptor> path;
+		return p;
 		
 		//using aedge =  property_traits<weightMap>::value_type;
 		//int d[450][450];
@@ -371,9 +276,83 @@ namespace cwd
 		//	}
 		//}
 
+	}
 
+	void generateContig(const cwd::AGraph& g, std::vector<int>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id)
+	{
+		auto v_prop = boost::get(vertex_property_t(), g);
+		if (p.size() > 1)
+		{
+			auto assembly = seq[v_prop[p[0]].r];
+			auto E_ovl = get(&AEdge::ovl, g);
+			auto E_adj = get(&AEdge::adj, g);
+			for (auto i = p.begin(); /*false && */i != prev(p.end()); i++)
+			{
+				auto e = edge(*i, *std::next(i), g).first;
+				if (e.m_eproperty)
+				{
+					//outAssembly << "PRE:\n" << assembly << " " << endl;
+					//outAssembly << "NEWREAD:\n" << seq[v_prop[*i].r] << endl;
+					//outAssembly << "OVL:\n" << E_ovl[e].SP1 << " " 
+					//	<< E_ovl[e].SP2 << " " << E_ovl[e].EP1 << " " 
+					//	<< E_ovl[e].EP2 << endl;
+					//outAssembly << "ADJ:\n" << E_adj[e] << endl;
+					//cout << "ADJ: " << bitset<2>(E_adj[e]) << " orient: " << E_ovl[e].orient << endl;
+					if (v_prop[*i].r == E_ovl[e].r1)
+					{
+						//cout << "NEWREAD: SP1: " << E_ovl[e].SP1 << " EP1: " << E_ovl[e].EP1 
+						//	<< " SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2 
+						//	<< " LEN1: " << length(seq[v_prop[*i].r]) 
+						//	<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
+						//compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
+						//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+						//		  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					}
+					else
+					{
+						//cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
+						//	<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
+						//	<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
+						//	<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
 
+						//compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
+						//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+						//		E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					}
+					assembly = concatReads(assembly, v_prop[*std::next(i)].r,
+						seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
+					//cout << "RES:\n";
+					//cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
+					//outAssembly << "RES:\n" << assembly << endl;
+				}
+				else
+				{
+					continue;
+					//auto e = edge(*i, *std::next(i), g).first;
+					//if (e.m_eproperty)
+					//{
+					//	cout << "ADJ: " << E_adj[e] << endl;
+					//	cout << "NEWREAD:\n";
+					//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*std::next(i)].r,
+					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+					//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					//	assembly = concatReads(assembly, v_prop[*std::next(i)].r,
+					//		seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
+					//	cout << "RES:\n";
+					//	cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
+				}
+			}
+			seqOut << boost::format(">contig_%d length=%d; reads=%d; type=dna\n") % id % length(assembly) % p.size();
+			auto a = begin(assembly);
+			for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+			{
+				seqOut << string{ a, next(a, 1000) } << endl;
+			}
+			seqOut << string{ a, end(assembly) } << endl;
+			seqOut << endl;
 
+			//cout << "total: " << length(assembly) << endl;
+		}
 	}
 
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, int adj)
