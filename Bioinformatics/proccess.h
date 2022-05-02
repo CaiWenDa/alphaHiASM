@@ -22,6 +22,9 @@
 #include "boost/property_map/property_map.hpp"
 #include "boost/graph/graphviz.hpp"
 #include "boost/format.hpp"
+#include "boost/graph/subgraph.hpp"
+#include "boost/graph/graph_utility.hpp"
+#include "boost/graph/connected_components.hpp"
 
 namespace cwd {
 	using namespace std;
@@ -103,7 +106,7 @@ namespace cwd {
 		} adj;
 
 		assemblyInfo_t ovl;
-		int weight = -1;
+		double weight = -1;
 
 		friend ostream& operator<<(ostream& out, const AEdge& e)
 		{
@@ -141,13 +144,15 @@ namespace cwd {
 		return edge_writer<WeightMap>(w);
 	}
 
-	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::directedS, boost::property<vertex_property_t, AVertex>, AEdge>;
-
-	kmerHashTable_t* createKmerHashTable(const seqData_t& seq);
+	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::bidirectionalS, boost::property<vertex_property_t, AVertex>, AEdge>;
+	using SubGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::undirectedS, boost::property<vertex_property_t, AVertex>, AEdge>;
+	typedef boost::filtered_graph<AGraph, function<bool(AGraph::edge_descriptor)>, function<bool(AGraph::vertex_descriptor)> > ComponentGraph;
+	kmerHashTable_t* createKmerHashTable(const seqData_t& seq, bool isFull = false);
 	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
-	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2, uint r, uint i);
+	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
 	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
+	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 
 	template<typename T, typename R>
 	vector<alignInfo_t> getCommonKmerSet(T range, R read)
@@ -187,13 +192,18 @@ namespace cwd {
 
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, int block1, int block2, ofstream& outFile);
-	void assembler(const seqData_t& seq);
+	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen);
+	void assembler(const seqData_t& seq, ofstream & seqOut);
 	kmer_t revComp(const kmer_t& kmer);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
 	std::string getCurrentDate();
 	float jaccard(string& a, string& b);
 	float hamming(string& a, string& b);
 	void toyAssembly(seqData_t& seq, int block1, int block2);
+	void connected_components_subgraphs(AGraph const& g);
+	bool isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b);
+	void DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited);
+	std::set<size_t> finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
+	void mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump);
 }

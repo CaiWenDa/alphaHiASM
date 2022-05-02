@@ -4,15 +4,19 @@
 #include <boost/graph/bellman_ford_shortest_paths.hpp>
 #include <boost/graph/floyd_warshall_shortest.hpp>
 #include <boost/graph/random_spanning_tree.hpp>
+extern cwd::seqData_t assemblySeq;
+
 namespace cwd
 {
 	using vertex_iterator = boost::graph_traits<AGraph>::vertex_iterator;
 	using edge_iterator = boost::graph_traits<AGraph>::edge_iterator;
 	using edge_descriptor = boost::graph_traits<AGraph>::edge_descriptor;
 	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
+	using out_edge_iterator = boost::graph_traits<AGraph>::out_edge_iterator;
+	using in_edge_iterator = boost::graph_traits<AGraph>::in_edge_iterator;
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, int adj);
 
-	void generateContig(const cwd::AGraph& g, std::vector<int>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id);
+	void generateContig(const cwd::AGraph & g, std::vector<vertex_descriptor>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id);
 	
 	void compSeqInRange(const seqan::Dna5String & r1, const seqan::Dna5String & r2, int r, uint start1, uint start2, uint end1, uint end2, uint len, bool orient)
 	{
@@ -101,54 +105,220 @@ namespace cwd
 	//	}
 	//}
 
-	vector<int> findPath(const AGraph& g, const seqData_t& seq, ofstream & outAssembly)
+	vector<vector<vertex_descriptor>> findPath(const AGraph & g, const seqData_t& seq, ofstream & outAssembly)
 	{
 		using namespace boost;
 		vertex_iterator vi, vend;
 		tie(vi, vend) = vertices(g);
-		uint len = std::distance(vi, vend);
+		//uint len = std::distance(vi, vend);
 		auto e_prop = boost::get(&AEdge::weight, g);
+		auto ovl_prop = boost::get(&AEdge::ovl, g);
+		auto adj_prop = boost::get(&AEdge::adj, g);
 		using weightMap = decltype(e_prop);
 		int n = num_vertices(g);
-		edge_iterator e, eend;
-		tie(e, eend) = boost::edges(g);
+		//vector<pair<vector<int>, size_t>> p_v;
+		vector<vector<vertex_descriptor>> p_v;
+		outAssembly << " Vn: " << n << endl;
+#if 0
 
-		vector<int> v_dis(n, numeric_limits<short>::max());
-		v_dis[0] = 0;
-		vector<int> path(n, -1);
-		vector<int> p;
-
-		for (int i = 0; i < n; ++i)
-			path[i] = i;
-		bool r = boost::bellman_ford_shortest_paths(g, n, e_prop, &path[0], &v_dis[0],
-			boost::closed_plus<int>(), std::less<int>(), default_bellman_visitor());
-		int tar = std::distance(v_dis.begin(), 
-			std::min_element(std::next(v_dis.begin()), v_dis.end()));
-		if (r)
+		for (size_t src = 0; src < n; src++)
 		{
-			//copy(v_dis.begin(), v_dis.end(), ostream_iterator<int, char>(cout, " "));
-			//cout << endl;
-			//copy(path.begin(), path.end(), ostream_iterator<int, char>(cout, " "));
-			//cout << endl;
-			outAssembly << " Vn: " << n << ", path: ";
-			int s;
-			p.push_back(tar);
-			for (s = path[tar]; s != path[s] && s != tar; s = path[s])
+			if (boost::out_degree(src, g) < 1)
 			{
-				p.push_back(s);
+				continue;
 			}
-			if (s != tar)
+			vector<double> v_dis(n, numeric_limits<short>::max());
+			v_dis[src] = 0;
+			vector<int> path(n, -1);
+			vector<int> p;
+
+			for (int i = 0; i < n; ++i)
+				path[i] = i;
+			bool r = boost::bellman_ford_shortest_paths(g, n, e_prop, &path[0], &v_dis[0],
+				boost::closed_plus<double>(), std::less<double>(), default_bellman_visitor());
+			int tar = std::distance(v_dis.begin(),
+				std::min_element(std::next(v_dis.begin()), v_dis.end()));
+			if (r)
 			{
-				p.push_back(s);
+				//copy(v_dis.begin(), v_dis.end(), ostream_iterator<int, char>(cout, " "));
+				//cout << endl;
+				//copy(path.begin(), path.end(), ostream_iterator<int, char>(cout, " "));
+				//cout << endl;
+				outAssembly << " path: ";
+				int s;
+				p.push_back(tar);
+				for (s = path[tar]; s != path[s] && s != tar; s = path[s])
+				{
+					p.push_back(s);
+				}
+				if (s != tar)
+				{
+					p.push_back(s);
+				}
+				std::reverse(p.begin(), p.end());
+				copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outAssembly, " -> "));
+				outAssembly << *p.rbegin() << endl;
+				if (p.size() > 0)
+				{
+					p_v.push_back({ p, tar });
+				}
 			}
-			std::reverse(p.begin(), p.end());
-			copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outAssembly, " -> "));
-			outAssembly << *p.rbegin() << endl;
+			else
+				cout << "negative cycle." << endl;
 		}
-		else
-			cout << "negative cycle." << endl;
-		return p;
-		
+		auto p = max_element(p_v.begin(), p_v.end(), 
+								[](pair<vector<int>, size_t>& a, pair<vector<int>, size_t>& b)
+								{ 
+									return a.first.size() < b.first.size();
+								}
+							)->first;
+		vector<vector<int>> ps;
+		for (auto& i : p_v)
+		{
+			if (i.first.size() >= p.size())
+			{
+				ps.push_back(i.first);
+			}
+		}
+		return ps;
+#endif // 0
+
+		out_edge_iterator e, eend;
+		std::set<vertex_descriptor> path;
+		vector<vertex_descriptor> vex;
+		for (auto v = vi; v != vend; v++)
+		{
+			if (boost::in_degree(*v, g) == 0 and path.insert(*v).second)
+			{
+				vex.push_back(*v);
+			}
+		}
+
+		while (!vex.empty())
+		{
+			for (auto& vs : vex)
+			{
+				//if (source.find(vs) != source.end())
+				//{
+				//	continue;
+				//}
+				vector<vertex_descriptor> pt;
+				pt.push_back(vs);
+				//path.insert(vs);
+				AEdge::Adj adj;
+				bool preOrient = true;
+				cout << vs;
+				while (boost::out_degree(vs, g))
+				{
+					tie(e, eend) = boost::out_edges(vs, g);
+					vector<edge_descriptor> v_edge;
+					for (auto ei = e; ei != eend; ei++)
+					{
+						if (preOrient)
+						{
+							v_edge.push_back(*ei);
+						}
+						else
+						{
+							if (adj == AEdge::HeadHead)
+							{
+								if (adj_prop[*ei] != AEdge::HeadHead and adj_prop[*ei] != AEdge::HeadTail)
+								{
+									v_edge.push_back(*ei);
+								}
+							}
+							else if (adj == AEdge::TailTail)
+							{
+								if (adj_prop[*ei] != AEdge::TailHead and adj_prop[*ei] != AEdge::TailTail)
+								{
+									v_edge.push_back(*ei);
+								}
+							}
+							else
+							{
+								;
+							}
+						}
+					}
+					if (v_edge.empty())
+					{
+						break;
+					}
+					sort(v_edge.begin(), v_edge.end(),
+						[&e_prop](edge_descriptor a, edge_descriptor b)
+					{
+						return e_prop[a] < e_prop[b];
+					});
+					auto p = v_edge.begin();
+					auto orient = ovl_prop[*p].orient;
+					auto nextv = boost::target(*p, g);
+					//cout << vs << " ";
+					while (!path.insert(nextv).second && ((p = std::next(p)) != v_edge.end()))
+					{
+						nextv = boost::target(*p, g);
+						orient = ovl_prop[*p].orient;
+					}
+					if (p != v_edge.end())
+					{
+						vs = nextv;
+						pt.push_back(nextv);
+						preOrient = orient;
+						adj = adj_prop[*p];
+						cout << " -> " << "(" << orient << ") " << nextv;
+					}
+					else
+					{
+						break;
+					}
+				}
+				cout << endl;
+				//in_edge_iterator ei, eiend;
+				//vector<vertex_descriptor> pt_pre;
+				//while (boost::in_degree(vs, g))
+				//{
+				//	tie(ei, eiend) = boost::in_edges(vs, g);
+				//	auto p = min_element(ei, eiend,
+				//		[&e_prop](edge_descriptor a, edge_descriptor b)
+				//	{
+				//		return e_prop[a] < e_prop[b];
+				//	}
+				//	);
+				//	auto nextv = boost::source(*p, g);
+				//	if (source.insert(nextv).second)
+				//	{
+				//		vs = nextv;
+				//		pt_pre.push_back(nextv);
+				//		source.insert(nextv);
+				//	}
+				//	else
+				//	{
+				//		break;
+				//	}
+				//}
+				//std::reverse(pt_pre.begin(), pt_pre.end());
+				//pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
+				if (pt.size() > 1)
+				{
+					std::reverse(pt.begin(), pt.end());
+					copy(pt.begin(), prev(pt.end()), ostream_iterator<int, char>(outAssembly, " -> "));
+					outAssembly << *pt.rbegin() << endl;
+					//cout << pt.size() << endl;
+					p_v.push_back(pt);
+				}
+
+			}
+
+			vex.clear();
+			for (auto v = vi; v != vend; v++)
+			{
+				if (boost::in_degree(*v, g) == 0 and path.insert(*v).second)
+				{
+					vex.push_back(*v);
+				}
+			}
+
+		}
+		return p_v;
 		//using aedge =  property_traits<weightMap>::value_type;
 		//int d[450][450];
 		//int paths[450][450];
@@ -278,7 +448,7 @@ namespace cwd
 
 	}
 
-	void generateContig(const cwd::AGraph& g, std::vector<int>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id)
+	void generateContig(const cwd::AGraph & g, std::vector<vertex_descriptor>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id)
 	{
 		auto v_prop = boost::get(vertex_property_t(), g);
 		if (p.size() > 1)
@@ -289,6 +459,9 @@ namespace cwd
 			for (auto i = p.begin(); /*false && */i != prev(p.end()); i++)
 			{
 				auto e = edge(*i, *std::next(i), g).first;
+				auto src = source(e, g);
+				auto des = target(e, g);
+				auto b = src == *i && des == *std::next(i);
 				if (e.m_eproperty)
 				{
 					//outAssembly << "PRE:\n" << assembly << " " << endl;
@@ -298,27 +471,36 @@ namespace cwd
 					//	<< E_ovl[e].EP2 << endl;
 					//outAssembly << "ADJ:\n" << E_adj[e] << endl;
 					//cout << "ADJ: " << bitset<2>(E_adj[e]) << " orient: " << E_ovl[e].orient << endl;
-					if (v_prop[*i].r == E_ovl[e].r1)
-					{
-						//cout << "NEWREAD: SP1: " << E_ovl[e].SP1 << " EP1: " << E_ovl[e].EP1 
-						//	<< " SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2 
-						//	<< " LEN1: " << length(seq[v_prop[*i].r]) 
-						//	<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
-						//compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
-						//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-						//		  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-					}
-					else
-					{
-						//cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
-						//	<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
-						//	<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
-						//	<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
+					//if (1/*v_prop[*i].r == E_ovl[e].r1*/)
+					//{
+					//	cout << v_prop[*i].r << "--- SP1: " << E_ovl[e].SP1 << " EP1 : " << E_ovl[e].EP1 << endl
+					//		<< v_prop[*std::next(i)].r << "--- SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2
+					//		<< " LEN1: " << length(seq[v_prop[*i].r]) 
+					//		<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
+					//	
+					//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
+					//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
+					//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
+					//	
+					//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
+					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+					//			  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					//}
+					//else
+					//{
+					//	cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
+					//		<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
+					//		<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
+					//		<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
+					//	
+					//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
+					//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
+					//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
 
-						//compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
-						//	E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-						//		E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-					}
+					//	compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
+					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+					//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					//}
 					assembly = concatReads(assembly, v_prop[*std::next(i)].r,
 						seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
 					//cout << "RES:\n";
@@ -328,35 +510,27 @@ namespace cwd
 				else
 				{
 					continue;
-					//auto e = edge(*i, *std::next(i), g).first;
-					//if (e.m_eproperty)
-					//{
-					//	cout << "ADJ: " << E_adj[e] << endl;
-					//	cout << "NEWREAD:\n";
-					//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*std::next(i)].r,
-					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-					//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-					//	assembly = concatReads(assembly, v_prop[*std::next(i)].r,
-					//		seq[v_prop[*std::next(i)].r], E_ovl[e], E_adj[e]);
-					//	cout << "RES:\n";
-					//	cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
 				}
 			}
-			seqOut << boost::format(">contig_%d length=%d; reads=%d; type=dna\n") % id % length(assembly) % p.size();
-			auto a = begin(assembly);
-			for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+			if (length(assembly) > 0)
 			{
-				seqOut << string{ a, next(a, 1000) } << endl;
+				seqOut << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id % length(assembly) % p.size();
+				auto a = begin(assembly);
+				for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+				{
+					seqOut << string{ a, next(a, 1000) } << endl;
+				}
+				seqOut << string{ a, end(assembly) } << endl;
+				seqOut << endl;
+				appendValue(assemblySeq, assembly);
 			}
-			seqOut << string{ a, end(assembly) } << endl;
-			seqOut << endl;
-
 			//cout << "total: " << length(assembly) << endl;
 		}
 	}
 
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, int adj)
 	{
+		using seqan::length;
 		string newRead = "";
 		if (ovl.orient)
 		{
@@ -367,37 +541,51 @@ namespace cwd
 			else if (adj == AEdge::TailHead)
 			{
 				string newRead1 = { begin(pre), end(pre) };
-				string newRead2 = { begin(R2) + (r2 == ovl.r1 ? ovl.EP1 : ovl.EP2), end(R2) };
+				string newRead2 = { begin(R2) + (ovl.EP1 < ovl.EP2 ? ovl.EP1 : ovl.EP2), end(R2) };
 				newRead += newRead1;
 				newRead += newRead2;
+				//cout << boost::format("r1: %d, r2: %d, ovl_len: %d\n") % length(newRead1) % length(newRead2) % (ovl.EP1 - ovl.SP1);
 			}
 			else
 			{
-				string newRead1 = { begin(R2), begin(R2) + (r2 == ovl.r1 ? ovl.SP1 : ovl.SP2) };
+				string newRead1 = { begin(R2) + (ovl.EP1 < ovl.EP2 ? ovl.EP1 : ovl.EP2), end(R2) };
 				string newRead2 = { begin(pre), end(pre) };
-				newRead += newRead1;
 				newRead += newRead2;
+				newRead += newRead1;
+				//cout << boost::format("r1: %d, r2: %d, ovl_len: %d\n") % length(newRead1) % length(newRead2) % (ovl.EP1 - ovl.SP1);
 			}
 		}
 		else 
 		{
-			if (adj == AEdge::HeadHead || adj == AEdge::TailTail)
+			if (adj == AEdge::HeadHead)
 			{
-				return length(pre) > length(R2) ? pre : R2;
+				string newRead1 = { begin(R2) + (r2 == ovl.r1 ? ovl.EP1 : ovl.EP2), end(R2) };
+				string newRead2 = { begin(pre), end(pre) };
+				newRead += newRead2;
+				newRead += cwd::revComp(newRead1);
+				//cout << boost::format("r1: %d, r2: %d, ovl_len: %d\n") % length(newRead1) % length(newRead2) % (ovl.EP1 - ovl.SP1);
+			}
+			else if (adj == AEdge::TailTail)
+			{
+				string newRead1 = { begin(R2), begin(R2) + (r2 == ovl.r1 ? ovl.SP1 : ovl.SP2) };
+				string newRead2 = { begin(pre), end(pre) };
+				newRead += newRead2;
+				newRead += cwd::revComp(newRead1);
+				//cout << boost::format("r1: %d, r2: %d, ovl_len: %d\n") % length(newRead1) % length(newRead2) % (ovl.EP1 - ovl.SP1);
 			}
 			else if (adj == AEdge::TailHead)
 			{
 				string newRead1 = { begin(pre), end(pre) };
 				string newRead2 = { begin(R2), begin(R2) + (r2 == ovl.r1 ? ovl.SP1 : ovl.SP2) };
-				newRead += newRead1;
-				newRead += cwd::revComp(newRead2);
+				//newRead += newRead1;
+				//newRead += cwd::revComp(newRead2);
 			}
 			else
 			{
 				string newRead1 = { begin(R2) + (r2 == ovl.r1 ? ovl.SP1 : ovl.SP2) , end(R2)};
 				string newRead2 = { begin(pre), end(pre) };
-				newRead += cwd::revComp(newRead1);
-				newRead += newRead2;
+				//newRead += newRead2;
+				//newRead += cwd::revComp(newRead1);
 			}
 		}
 		return newRead;

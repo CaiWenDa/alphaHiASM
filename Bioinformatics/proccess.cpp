@@ -1,6 +1,7 @@
 #include "proccess.h"
 #include "assembler.hpp"
-
+#include <boost/graph/copy.hpp>
+#include "boost/graph/depth_first_search.hpp"
 using namespace std;
 using namespace seqan;
 using namespace cwd;
@@ -9,17 +10,19 @@ void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint sta
 
 mutex fileMutex;
 mutex overlapMutex;
-mutex assemblyGraphWriteMutex;
 uint KMER_STEP = 1;
 const int KMER_LIMIT = 51;
+const int OVL_TIP_LEN = 100;
 const int CHAIN_LEN = 2;
-const int DETECT_LEN = 2000;
+const double DETECT_RATIO = 0.4;
 vector<shared_ptr<list<assemblyInfo_t>>> assemblyChain;
-vector<shared_ptr<AGraph>> assemblyGraph;
+shared_ptr<AGraph> assemblyGraph;
 vector<assemblyInfo_t> overlap;
+seqData_t assemblySeq;
+shared_ptr<SubGraph> tmpGraph;
+vector<ComponentGraph> comps;
 
-
-kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq)
+kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 {
 	kmerHashTable_t* kmerHashTable = new kmerHashTable_t();
 	uint readID = 0;
@@ -28,26 +31,39 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq)
 	cout << "Creating HashTable...\n";
 	for (auto& read : seq)
 	{
+		int dlen = length(read) * DETECT_RATIO;
 		uint pos = 0;
-		auto headEnd = begin(read) + DETECT_LEN - KMER_LEN;
-		auto tailBegin = end(read) - DETECT_LEN - KMER_LEN;
-		for (auto i = begin(read); i < headEnd; i += KMER_STEP, pos += KMER_STEP)
+		if (!isFull)
 		{
-			KMER_STEP = di(dre);
-			kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
-			hashValue_t kmerInfo{ readID, pos }; //, pos + KMER_LEN };
-			kmerHashTable->insert({ kmer, kmerInfo });
-		}
+			auto headEnd = begin(read) + dlen - KMER_LEN;
+			auto tailBegin = end(read) - dlen - KMER_LEN;
+			for (auto i = begin(read); i < headEnd; i += KMER_STEP, pos += KMER_STEP)
+			{
+				KMER_STEP = di(dre);
+				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
+				hashValue_t kmerInfo{ readID, pos }; //, pos + KMER_LEN };
+				kmerHashTable->insert({ kmer, kmerInfo });
+			}
 
-		uint pos2 = distance(begin(read), tailBegin);
-		for (auto i = tailBegin; i < end(read) - KMER_LEN; i += KMER_STEP, pos2 += KMER_STEP)
+			uint pos2 = distance(begin(read), tailBegin);
+			for (auto i = tailBegin; i < end(read) - KMER_LEN; i += KMER_STEP, pos2 += KMER_STEP)
+			{
+				KMER_STEP = di(dre);
+				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
+				hashValue_t kmerInfo{ readID, pos2 }; //, pos + KMER_LEN };
+				kmerHashTable->insert({ kmer, kmerInfo });
+			}
+		}
+		else
 		{
-			KMER_STEP = di(dre);
-			kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
-			hashValue_t kmerInfo{ readID, pos2 }; //, pos + KMER_LEN };
-			kmerHashTable->insert({ kmer, kmerInfo });
+			for (auto i = begin(read); i < end(read); i += KMER_STEP, pos += KMER_STEP)
+			{
+				KMER_STEP = di(dre);
+				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
+				hashValue_t kmerInfo{ readID, pos }; //, pos + KMER_LEN };
+				kmerHashTable->insert({ kmer, kmerInfo });
+			}
 		}
-
 		readID++;
 	}
 	cout << "HashTable has been created!\n";
@@ -190,15 +206,16 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	return 0;
 }
 
-vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i)
+vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	//auto r1 = chain.begin();
 	//auto r2 = find_if(r1, chain.end(), [](alignInfo_t& a) { return a.orient == false && a.SP1 == numeric_limits<uint>::max() && a.SP2 == numeric_limits<uint>::max(); });
 	vector<assemblyInfo_t> res;
-	auto ch = *max_element(chain_v.begin(), chain_v.end(), [](shared_ptr<list<alignInfo_t>>& a, shared_ptr<list<alignInfo_t>>& b) { return a->size() < b->size();});
-	//for (auto& ch : chain_v)
-	//{
-		if (ch->size() > 20)
+	//auto ch = *max_element(chain_v.begin(), chain_v.end(), [](shared_ptr<list<alignInfo_t>>& a, shared_ptr<list<alignInfo_t>>& b) { return a->size() < b->size();});
+	//auto ch = chain_v[0];
+	for (auto& ch : chain_v)
+	{
+		if (ch->size() > chainLen)
 		{
 			uint P1 = ch->begin()->SP1; // P1
 			uint Q1 = min_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
@@ -215,14 +232,19 @@ vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& 
 			a.EP1 = ovl_end1;
 			a.EP2 = ovl_end2;
 			a.orient = ch->begin()->orient;
-			if (a.EP1 - a.SP1 > 1000 && a.EP2 - a.SP2 > 1000)
+			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
+			if (len > ovLen /*&& len < min(len1, len2) * 1*/)
 			{
 				res.push_back(a);
+			}
+			else
+			{
+				//res.push_back(a);
 			}
 		}
 		//r1 = next(r2);
 		//r2 = find_if(r1, chain_v.end(), [](alignInfo_t a) { return a.orient == false && a.SP1 == F_END.SP1 && a.SP2 == F_END.SP2; });
-	//}
+	}
 	
 	//uint P1 = chain.begin()->SP1; // P1
 	//uint Q1 = min_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
@@ -350,9 +372,9 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 	}
 }
 
-void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize)
+void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
 {
-	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i);
+	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
 
 	//for (auto& ovl : v_ovl)
 	//{
@@ -372,7 +394,7 @@ void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>
 	overlap.insert(overlap.end(), v_ovl.begin(), v_ovl.end());
 }
 
-void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, int block1, int block2, ofstream& outFile)
+void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen)
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
 	for (uint r = block1; r < block2; r++)
@@ -385,22 +407,28 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 			//	cout << string{ begin(seq[r]), begin(seq[r]) + 5347 } << "\n" << string{ begin(seq[r]), begin(seq[r]) + 5347 } << endl;
 			//else continue;
 			auto range = kmerSet->equal_range(i);
-			if (range.first == range.second) continue;
-			auto commonKmerSet = getCommonKmerSet(range, seq[r]);
-			//cout << commonKmerSet.size() << endl;
-			if (commonKmerSet.size() > 0)
+			if (range.first == range.second)
 			{
-				auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
-				if (chain_v.size() > 0)
+				continue;
+			}
+			else
+			{
+				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
+				//cout << commonKmerSet.size() << endl;
+				if (commonKmerSet.size() > 0)
 				{
-					lock_guard<mutex> lock(fileMutex);
-					outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600);
+					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
+					if (chain_v.size() > 0)
+					{
+						lock_guard<mutex> lock(fileMutex);
+						outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600, chainLen, ovLen);
+					}
 				}
 			}
 		}
 		//seqan::clear(seq[r]);
 	}
-	cout << boost::format("one stage completed!\nmapped %d - %d reads.\n") % block1 % block2;
+	cout << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 	//std::sort(info.begin(), info.end(), 
 	//	[](assemblyInfo_t& a, assemblyInfo_t& b)
 	//	{
@@ -420,7 +448,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 	//assembler();
 }
 
-void cwd::assembler(const seqData_t& seq)
+void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
 {
 	//ofstream outAssembly("toyAssembly.csv");
 	//for (auto& chain : assemblyChain)
@@ -441,13 +469,11 @@ void cwd::assembler(const seqData_t& seq)
 	//assemblyChain.clear();
 	//outAssembly.close();
 
-	//outAssembly.open("toyAssembly_graph.txt");
-	ofstream outAssembly;
-	outAssembly.open("toyAssembly_path.txt");
-	ofstream seqOut("result.fasta");
-
+	ofstream outAssembly, outPath;
+	outPath.open("toyAssembly_path.txt");
+	outAssembly.open("toyAssembly_graph.txt");
 	int i = 0;
-	for (auto& aGraph : assemblyGraph)
+	for (auto& aGraph : comps)
 	{
 	//	boost::dynamic_properties dp;
 	//	dp.property("node_id", boost::get(&AVertex::r, *aGraph));
@@ -455,17 +481,24 @@ void cwd::assembler(const seqData_t& seq)
 	//	dp.property("label", boost::get(vertex_property_t(), *aGraph));
 	//	dp.property("label", boost::get(edge_property_t(), *aGraph));
 	//	boost::write_graphviz(outAssembly, *aGraph, dp);
-		
-	//	boost::write_graphviz(outAssembly, *aGraph, boost::make_label_writer(boost::get(vertex_property_t(), *aGraph)),
-	//	make_edge_writer(boost::get(&AEdge::adj, *aGraph)));
-	//	outAssembly << endl;
-		outAssembly << "Graph: " << i++;
-		auto p = findPath(*aGraph, seq, outAssembly);
-		generateContig(*aGraph, p, seq, seqOut, i);
+		AGraph g;
+		copy_graph(aGraph, g);
+		boost::write_graphviz(outAssembly, g, boost::make_label_writer(boost::get(vertex_property_t(), aGraph)),
+		make_edge_writer(boost::get(&AEdge::adj, g)));
+		outAssembly << endl;
+		outPath << "Graph: " << i++;
+		auto ps = findPath(g, seq, outPath);
+		//std::set<int> sp(p.begin(), p.end());
+		for (auto& p : ps)
+		{
+			generateContig(g, p, seq, seqOut, i++);
+		}
+		//set_union(un.begin(), un.end(), sp.begin(), sp.end(), inserter(un, un.begin()));
 	}
-	assemblyGraph.clear();
+	comps.clear();
+	overlap.clear();
 	outAssembly.close();
-	seqOut.close();
+	outPath.close();
 }
 
 kmer_t cwd::revComp(const kmer_t& kmer)
@@ -601,6 +634,10 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 {
 	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 	vertex_descriptor src, dst;
+	uint idx = 0;
+	assemblyGraph = make_shared<AGraph>();
+	tmpGraph = make_shared<SubGraph>();
+	auto e_prop = boost::get(&AEdge::weight, *assemblyGraph);
 	for (int i = block1; i < block2; i++)
 	{
 		auto& ovl = overlap[i];
@@ -612,14 +649,15 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 			uint i = ovl.r2;
 			uint len_r = length(seq[r]);
 			uint len_i = length(seq[i]);
+			double weight = -1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1);
 			bool isHeadTail = false, isTailHead = false, isHeadHead = false, isTailTail = false;
 			if (
-				(isTailHead = len_r - ovl.EP1 < 100 && ovl.SP2 < 100 && ovl.orient) ||
-				(isHeadTail = len_i - ovl.EP2 < 100 && ovl.SP1 < 100 && ovl.orient) ||
-				(isTailHead = len_r - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient) ||
-				(isHeadTail = ovl.SP2 < 100 && ovl.SP1 < 100 && !ovl.orient) ||
-				(isHeadHead = ovl.SP1 < 100 && ovl.SP2 < 100 && !ovl.orient) ||
-				(isTailTail = len_r - ovl.EP1 < 100 && length(seq[i]) - ovl.EP2 < 100 && !ovl.orient)
+				(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && ovl.orient) ||
+				(isHeadTail = len_i - ovl.EP2 < OVL_TIP_LEN && ovl.SP1 < OVL_TIP_LEN && ovl.orient) ||
+				//(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient) ||
+				//(isHeadTail = ovl.SP2 < OVL_TIP_LEN && ovl.SP1 < OVL_TIP_LEN && !ovl.orient) ||
+				(isHeadHead = ovl.SP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && !ovl.orient) ||
+				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
 				) //TODO direction
 			{
 				if (0)
@@ -657,131 +695,324 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 						assemblyChain.push_back(n_chain);
 					}
 				}
-
-				for (auto p = assemblyGraph.begin(); p != assemblyGraph.end(); p++)
+				
+				auto& aGraph = assemblyGraph;
+				boost::graph_traits<AGraph>::vertex_iterator vi, vi_end;
+				boost::tie(vi, vi_end) = boost::vertices(*aGraph);
+				auto prop = boost::get(vertex_property_t(), *aGraph);
+				auto vx = find_if(vi, vi_end,
+					[=](vertex_descriptor ix) {
+						AVertex y = prop[ix];
+						return y.r == r || y.r == i;
+				});
+				if (vx != vi_end)
 				{
-					auto aGraph = *p;
-					boost::graph_traits<AGraph>::vertex_iterator vi, vi_end;
-					boost::tie(vi, vi_end) = boost::vertices(*aGraph);
-					auto prop = boost::get(vertex_property_t(), *aGraph);
-					auto vx = find_if(vi, vi_end,
-						[=](vertex_descriptor ix) {
-							AVertex y = prop[ix];
-							return y.r == r || y.r == i;
-					});
-					if (vx != vi_end)
+					flag = true;
+					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
+					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
+					if (prop[*vx].r == i)
 					{
-						flag = true;
-						AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
-						AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
-						if (prop[*vx].r == i)
+						auto vx2 = find_if(vi, vi_end,
+							[=](vertex_descriptor ix) {
+							AVertex y = prop[ix];
+							return y.r == r;
+						});
+						if (vx2 != vi_end)
 						{
-							auto vx2 = find_if(vi, vi_end,
-								[=](vertex_descriptor ix) {
-								AVertex y = prop[ix];
-								return y.r == r;
-							});
-							if (vx2 != vi_end)
+							auto e = boost::edge(*vx, *vx2, *aGraph);
+							if (e.first.m_eproperty)
 							{
-								//boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
+								auto edg = e.first;
+								if (e_prop[edg] > weight)
+								{
+									e_prop[edg] = weight;
+								}
 							}
+
 							else
 							{
-								src = boost::add_vertex(v, *aGraph);
-								if (isHeadTail)
-								{
-									boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
-								}
-								else if (isHeadHead)
-								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
-								}
-								else if (isTailHead)
-								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
-								}
-								else if (isTailTail)
-								{
-									boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
-								}
-								else
-								{
-									cout << "none\n";
-								}
-								//TODO: condition of direction
-							}
-						}
-						else
-						{
-							auto vx2 = find_if(vi, vi_end,
-								[=](vertex_descriptor ix) {
-								AVertex y = prop[ix];
-								return y.r == i;
-							});
-							if (vx2 != vi_end)
-							{
-								//boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
-							}
-							else
-							{
-								lock_guard<mutex> lock(overlapMutex);
-								dst = boost::add_vertex(v2, *aGraph);
 								if (isTailHead)
 								{
-									boost::add_edge(*vx, dst, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 								}
 								else if (isHeadTail)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 								}
 								else if (isHeadHead)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
 								}
 								else if (isTailTail)
 								{
-									boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
 								}
 								else
 								{
 									cout << "none\n";
 								}
-								//TODO: condition of direction
+
 							}
+							//add to an overlap vector
+						}
+						else
+						{
+							src = boost::add_vertex(v, *aGraph);
+							if (isHeadTail)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								// *vx -> src
+							}
+							else if (isHeadHead)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+							}
+							else if (isTailHead)
+							{
+								boost::add_edge(src, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+							}
+							else if (isTailTail)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+							}
+							else
+							{
+								cout << "none\n";
+							}
+							//TODO: condition of direction
+						}
+					}
+					else
+					{
+						auto vx2 = find_if(vi, vi_end,
+							[=](vertex_descriptor ix) {
+							AVertex y = prop[ix];
+							return y.r == i;
+						});
+						if (vx2 != vi_end)
+						{
+							auto e = boost::edge(*vx, *vx2, *aGraph);
+							if (e.first.m_eproperty)
+							{
+								auto edg = e.first;
+								if (e_prop[edg] > weight)
+								{
+									e_prop[edg] = weight;
+								}
+							}
+
+							else
+							{
+								if (isTailHead)
+								{
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								}
+								else if (isHeadTail)
+								{
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								}
+								else if (isHeadHead)
+								{
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								}
+								else if (isTailTail)
+								{
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								}
+								else
+								{
+									cout << "none\n";
+								}
+							}
+							//add to an overlap vector
+						}
+						else
+						{
+							dst = boost::add_vertex(v2, *aGraph);
+							if (isTailHead)
+							{
+								boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								// *vx -> dst
+							}
+							else if (isHeadTail)
+							{
+								boost::add_edge(dst, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+							}
+							else if (isHeadHead)
+							{
+								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+							}
+							else if (isTailTail)
+							{
+								boost::add_edge(*vx, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+							}
+							else
+							{
+								cout << "none\n";
+							}
+							//TODO: condition of direction
 						}
 					}
 				}
+
 				if (!flag)
 				{
-					auto aGraph = make_shared<AGraph>();
+					auto& aGraph = assemblyGraph;
 					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
 					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
 					src = boost::add_vertex(v, *aGraph);
 					dst = boost::add_vertex(v2, *aGraph);
 					if (isTailHead)
 					{
-						boost::add_edge(src, dst, AEdge{ AEdge::TailHead, ovl, -1 }, * aGraph);
+						boost::add_edge(src, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 					}
 					else if (isHeadTail)
 					{
-						boost::add_edge(dst, src, AEdge{ AEdge::HeadTail, ovl, -1 }, *aGraph);
+						boost::add_edge(dst, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 					}
 					else if (isHeadHead)
 					{
-						boost::add_edge(dst, src, AEdge{ AEdge::HeadHead, ovl, -1 }, *aGraph);
+						boost::add_edge(src, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+						boost::add_edge(dst, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
 					}
 					else if (isTailTail)
 					{
-						boost::add_edge(dst, src, AEdge{ AEdge::TailTail, ovl, -1 }, *aGraph);
+						boost::add_edge(src, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+						boost::add_edge(dst, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
 					}
 					else
 					{
 						cout << "none\n";
 					}
-					assemblyGraph.push_back(aGraph);
 				}
 			}
 		}
-
 	}
+	connected_components_subgraphs(*assemblyGraph);
+}
+
+void cwd::connected_components_subgraphs(AGraph const& g)
+{
+	using namespace boost;
+	boost::copy_graph(g, *tmpGraph);
+	std::shared_ptr<vector<unsigned long>> mapping = std::make_shared<vector<unsigned long>>(num_vertices(g));
+	size_t num = connected_components(*tmpGraph, mapping->data());
+
+	auto& component_graphs = comps;
+
+	for (size_t i = 0; i < num; i++)
+		component_graphs.emplace_back(g,
+			[mapping, i, &g](AGraph::edge_descriptor e) {
+		return mapping->at(source(e, g)) == i
+			|| mapping->at(target(e, g)) == i;
+	},
+			[mapping, i](AGraph::vertex_descriptor v) {
+		return mapping->at(v) == i;
+	});
+
+	//return component_graphs;
+}
+
+bool cwd::isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b)
+{
+	//vector<bool> visited(boost::num_vertices(g));
+	SubGraph gs;
+	boost::copy_graph(g, gs);
+	std::vector<boost::default_color_type> color_map(boost::num_vertices(gs));
+	auto color = boost::make_iterator_property_map(color_map.begin(), boost::get(boost::vertex_index_t(), gs));
+	boost::depth_first_search(gs, boost::default_dfs_visitor(), color, a);
+	//auto xx = color[b];
+
+	//DFS(g, a, visited);
+	return color[b] != boost::default_color_type::white_color;
+}
+
+void cwd::DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited)
+{
+	AGraph::out_edge_iterator ei, eend;
+	auto ep = boost::out_edges(i, g);
+	ei = ep.first;
+	eend = ep.second;
+	for (auto e = ei; e != eend; e++)
+	{
+		auto v = boost::target(*e, g);
+		visited[v] = true;
+		DFS(g, v, visited);
+	}
+}
+
+std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
+{
+	std::set<size_t> res;
+	for (auto& ch : chain_v)
+	{
+		if (ch->size() > chainLen)
+		{
+			uint P1 = ch->begin()->SP1; // P1
+			uint Q1 = min_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
+			uint Pnk = ch->rbegin()->SP1 + KMER_LEN; // Pn + k
+			uint Qnk = max_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
+
+			uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
+			ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
+			assemblyInfo_t a;
+			a.r1 = r;
+			a.r2 = i;
+			a.SP1 = ovl_str1;
+			a.SP2 = ovl_str2;
+			a.EP1 = ovl_end1;
+			a.EP2 = ovl_end2;
+			a.orient = ch->begin()->orient;
+			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
+			if (len >= min(len1, len2) * 0.95)
+			{
+				res.insert(r);
+				res.insert(i);
+			}
+		}
+	}
+
+	return res;
+}
+
+void cwd::mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump)
+{
+	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
+	for (uint r = block1; r < block2; r++)
+	{
+		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
+		auto kmerSet = findSameKmer(kmerHashTable, seq, r);
+		for (uint i = r + 1; i < length(seq); i++)
+		{
+			auto range = kmerSet->equal_range(i);
+			if (range.first == range.second)
+			{
+				continue;
+			}
+			else
+			{
+				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
+				//cout << commonKmerSet.size() << endl;
+				if (commonKmerSet.size() > 0)
+				{
+					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
+					if (chain_v.size() > 0)
+					{
+						lock_guard<mutex> lock(fileMutex);
+						auto v_ovl = finalOverlap2(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
+						set_union(dump.begin(), dump.end(), v_ovl.begin(), v_ovl.end(), inserter(dump, dump.begin()));
+					}
+				}
+			}
+		}
+	}
+	cout << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 }
