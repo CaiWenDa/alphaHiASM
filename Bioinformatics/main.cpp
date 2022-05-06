@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 	//}
 	string seqFileName = "/home/caiwenda/ecoli_20x_2.fastq";
 	string outFilePre = getCurrentDate();
-	string asmFileName = "result-" + outFilePre + ".fasta";
+	string asmFileName = "result_ecoli_.fasta";
 	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
 	//string seqFileName = "/public_data/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_20x.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 	int block2 = 0;
 	int b_size = length(seq) / thread_i;
 	ofstream outFile;//("result-" + getCurrentDate() + ".csv", ios_base::out);
-	ofstream seqOut(asmFileName, ios_base::app);
+	ofstream seqOut(asmFileName, ios_base::out);
 	vector<thread> threadPool;
 	cout << "Detecting Overlap...\n";
 	for (size_t i = 0; i < thread_i; i++)
@@ -159,7 +159,6 @@ int main(int argc, char* argv[])
 		seqOut << endl;
 	}
 #endif // 0
-
 	cout << "done!\n";
 	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	outFile.close();

@@ -14,7 +14,7 @@ uint KMER_STEP = 1;
 const int KMER_LIMIT = 51;
 const int OVL_TIP_LEN = 100;
 const int CHAIN_LEN = 2;
-const double DETECT_RATIO = 0.4;
+const double DETECT_RATIO = 0.3;
 vector<shared_ptr<list<assemblyInfo_t>>> assemblyChain;
 shared_ptr<AGraph> assemblyGraph;
 vector<assemblyInfo_t> overlap;
@@ -233,7 +233,7 @@ vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& 
 			a.EP2 = ovl_end2;
 			a.orient = ch->begin()->orient;
 			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
-			if (len > ovLen /*&& len < min(len1, len2) * 1*/)
+			if (len > ovLen && chain_v.size() < 3)
 			{
 				res.push_back(a);
 			}
@@ -473,6 +473,7 @@ void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
 	outPath.open("toyAssembly_path.txt");
 	outAssembly.open("toyAssembly_graph.txt");
 	int i = 0;
+	int totalLen = 0;
 	for (auto& aGraph : comps)
 	{
 	//	boost::dynamic_properties dp;
@@ -491,8 +492,12 @@ void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
 		//std::set<int> sp(p.begin(), p.end());
 		for (auto& p : ps)
 		{
-			generateContig(g, p, seq, seqOut, i++);
+			if (totalLen <= 4600000)
+			{
+				generateContig(g, p, seq, seqOut, i++, totalLen);
+			}
 		}
+		//break;
 		//set_union(un.begin(), un.end(), sp.begin(), sp.end(), inserter(un, un.begin()));
 	}
 	comps.clear();
@@ -573,7 +578,7 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 			return true;
 		}
 	}*/
-	return hamming(gap1, gap2) < 0.5f;
+	return hamming(gap1, gap2) < 0.1f;
 }
 
 std::string cwd::getCurrentDate()
@@ -649,7 +654,9 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 			uint i = ovl.r2;
 			uint len_r = length(seq[r]);
 			uint len_i = length(seq[i]);
-			double weight = -1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1);
+			string ovl1 = { begin(seq[r]) + ovl.SP1,  begin(seq[r]) + ovl.EP1 };
+			string ovl2 = { begin(seq[i]) + ovl.SP2,  begin(seq[i]) + ovl.EP2 };
+			double weight = -1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * (1 - hamming(ovl1, ovl2));
 			bool isHeadTail = false, isTailHead = false, isHeadHead = false, isTailTail = false;
 			if (
 				(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && ovl.orient) ||
@@ -710,83 +717,7 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 					flag = true;
 					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
 					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
-					if (prop[*vx].r == i)
-					{
-						auto vx2 = find_if(vi, vi_end,
-							[=](vertex_descriptor ix) {
-							AVertex y = prop[ix];
-							return y.r == r;
-						});
-						if (vx2 != vi_end)
-						{
-							auto e = boost::edge(*vx, *vx2, *aGraph);
-							if (e.first.m_eproperty)
-							{
-								auto edg = e.first;
-								if (e_prop[edg] > weight)
-								{
-									e_prop[edg] = weight;
-								}
-							}
-
-							else
-							{
-								if (isTailHead)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								}
-								else if (isHeadTail)
-								{
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								}
-								else if (isHeadHead)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								}
-								else if (isTailTail)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								}
-								else
-								{
-									cout << "none\n";
-								}
-
-							}
-							//add to an overlap vector
-						}
-						else
-						{
-							src = boost::add_vertex(v, *aGraph);
-							if (isHeadTail)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								// *vx -> src
-							}
-							else if (isHeadHead)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-							}
-							else if (isTailHead)
-							{
-								boost::add_edge(src, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-							}
-							else if (isTailTail)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-							}
-							else
-							{
-								cout << "none\n";
-							}
-							//TODO: condition of direction
-						}
-					}
-					else
+					if (prop[*vx].r == r) // if vx == r1
 					{
 						auto vx2 = find_if(vi, vi_end,
 							[=](vertex_descriptor ix) {
@@ -810,9 +741,11 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 								if (isTailHead)
 								{
 									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
 								}
 								else if (isHeadTail)
 								{
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
 									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 								}
 								else if (isHeadHead)
@@ -829,30 +762,116 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 								{
 									cout << "none\n";
 								}
+
 							}
 							//add to an overlap vector
 						}
 						else
 						{
-							dst = boost::add_vertex(v2, *aGraph);
+							src = boost::add_vertex(v2, *aGraph);
+							// src == r2
+							if (isHeadTail)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
+								// *vx -> src
+								boost::add_edge(src, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								// src -> *vx
+							}
+							else if (isHeadHead)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+							}
+							else if (isTailHead)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								boost::add_edge(src, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
+							}
+							else if (isTailTail)
+							{
+								boost::add_edge(*vx, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+							}
+							else
+							{
+								cout << "none\n";
+							}
+							//TODO: condition of direction
+						}
+					}
+					else // vx == r2
+					{
+						auto vx2 = find_if(vi, vi_end,
+							[=](vertex_descriptor ix) {
+							AVertex y = prop[ix];
+							return y.r == r;
+						});
+						if (vx2 != vi_end)
+						{
+							auto e = boost::edge(*vx, *vx2, *aGraph);
+							if (e.first.m_eproperty)
+							{
+								auto edg = e.first;
+								if (e_prop[edg] > weight)
+								{
+									e_prop[edg] = weight;
+								}
+							}
+
+							else
+							{
+								if (isTailHead)
+								{
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
+								}
+								else if (isHeadTail)
+								{
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								}
+								else if (isHeadHead)
+								{
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								}
+								else if (isTailTail)
+								{
+									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								}
+								else
+								{
+									cout << "none\n";
+								}
+							}
+							//add to an overlap vector
+						}
+						else
+						{
+							dst = boost::add_vertex(v, *aGraph);
+							// dst == r1
 							if (isTailHead)
 							{
-								boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								boost::add_edge(dst, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								// dst -> *vx
+								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
 								// *vx -> dst
 							}
 							else if (isHeadTail)
 							{
-								boost::add_edge(dst, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+								boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
+								boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 							}
 							else if (isHeadHead)
 							{
-								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
 								boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
+								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
 							}
 							else if (isTailTail)
 							{
-								boost::add_edge(*vx, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
 								boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
+								boost::add_edge(*vx, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
 							}
 							else
 							{
@@ -873,9 +892,11 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 					if (isTailHead)
 					{
 						boost::add_edge(src, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
+						boost::add_edge(dst, src, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
 					}
 					else if (isHeadTail)
 					{
+						boost::add_edge(src, dst, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
 						boost::add_edge(dst, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
 					}
 					else if (isHeadHead)
