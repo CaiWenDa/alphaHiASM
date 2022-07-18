@@ -8,43 +8,55 @@ int main(int argc, char* argv[])
 	using namespace std;
 	using namespace seqan;
 	using namespace cwd;
-	//if (argc <= 1)
-	//{
-	//    return 0;
-	//}
-	string seqFileName = "/home/caiwenda/ecoli_20x_2.fastq";
+	int ovLen = 2000;
+	extern int thread_i;
+	extern int genomeSize;
+	genomeSize = atoi(argv[4]);
+	thread_i = atoi(argv[1]);
+	if (argc <= 4)
+	{
+	    return 0;
+	}
+	//string seqFileName = "/home/caiwenda/dmel.trimmedReads_20x.fasta";
+	string seqFileName = argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
+	string asmFileName = argv[3];//"result_chm13_debug713.fasta";
+	//string asmFileName = "tmp.fasta";
 	string outFilePre = getCurrentDate();
-	string asmFileName = "result_ecoli_.fasta";
-	//string kfFileName = "/home/caiwenda/software/LROD/test/kmer_file.txt";
-	//string seqFileName = "/public_data/publicdata/publicdata/Reads/HiFi/D.mel/dmel_hifi_20x.fasta";
+	//string seqFileName = "result_ecoli_debug.fasta";
+	string kfFileName = "/home/caiwenda/ecoli_kmerFrequency.txt";
+	//string seqFileName = "dmel.trimmedReads_10x.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
 	cout << "seqFile : " << seqFileName << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
 	seqData_t seq;
 	StringSet<CharString> ID;
 	clock_t start = clock();
+
 	loadSeqData(seqFileName, ID, seq);
 	seqan::clear(ID);
+	malloc_trim(0);
 	auto kmerHashTable = createKmerHashTable(seq, true);
-	// filterKmer(kmerHashTable, kfFileName);
+	//filterKmer(*kmerHashTable, kfFileName);
 	int block1 = 0;
 	int block2 = 0;
 	int b_size = length(seq) / thread_i;
-	ofstream outFile;//("result-" + getCurrentDate() + ".csv", ios_base::out);
+	ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
 	ofstream seqOut(asmFileName, ios_base::out);
+	//ofstream seqOut;
 	vector<thread> threadPool;
 	cout << "Detecting Overlap...\n";
+#if 1
 	for (size_t i = 0; i < thread_i; i++)
 	{
 		block2 += b_size;
 		threadPool.push_back(thread(mainProcess, 
-			ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, 1000));
+			ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, ovLen));
 		block1 = block2;
 	}
 	if (length(seq) % thread_i != 0)
 	{
 		threadPool.push_back(thread(mainProcess, 
-			ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, 1000));
+			ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, ovLen));
 	}
 	for (auto& th : threadPool)
 	{
@@ -55,21 +67,34 @@ int main(int argc, char* argv[])
 	threadPool.clear();
 	malloc_trim(0);
 	//boost::thread_group tg;
-	//tg.create_thread(bind(toyAssembly, ref(seq), block1, block2));
+	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));
 	cout << "Creating Overlap Graph...\n";
 	extern vector<assemblyInfo_t> overlap;
-	toyAssembly(seq, 0, overlap.size());
+	createOverlapGraph(seq, 0, overlap.size());
 	cout << "Assembling reads...\n";
 	assembler(seq, seqOut);
 
-	extern seqData_t assemblySeq;
-#if 0
+	//ifstream overlapFile;
+	//assemblyInfo_t ovl;
+	//uint len1, len2;
+	//while (overlapFile >> ovl.r1 >> ovl.r2 >> ovl.orient >> ovl.SP1 >> ovl.EP1 >> ovl.SP2 >> ovl.EP2 >> len1 >> len2)
+	//{
+	//	overlap.emplace_back(ovl);
+	//}
+#endif
 
-	while (length(assemblySeq))
+#if 0
+	seqOut.close();
+	seqOut.open("result_ecoli_debug3.fasta");
+	extern seqData_t assemblySeq;
+	extern int OVL_TIP_LEN;
+	OVL_TIP_LEN = 200000;
+	ovLen = 1000;
+	while (length(assemblySeq) > 1)
 	{
 		seq = assemblySeq;
 		clear(assemblySeq);
-		kmerHashTable = createKmerHashTable(seq, true);
+		kmerHashTable = createKmerHashTable(seq);
 		block1 = 0;
 		block2 = 0;
 		b_size = length(seq) / thread_i;
@@ -80,13 +105,13 @@ int main(int argc, char* argv[])
 		{
 			block2 += b_size;
 			threadPool.push_back(thread(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, 600));
+				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, ovLen));
 			block1 = block2;
 		}
 		if (length(seq) % thread_i != 0)
 		{
 			threadPool.push_back(thread(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, 600));
+				ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, ovLen));
 		}
 		for (auto& th : threadPool)
 		{
@@ -96,22 +121,21 @@ int main(int argc, char* argv[])
 		threadPool.clear();
 		malloc_trim(0);
 		//boost::thread_group tg;
-		//tg.create_thread(bind(toyAssembly, ref(seq), block1, block2));
+		//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));
 		cout << "Creating Overlap Graph...\n";
 		extern vector<assemblyInfo_t> overlap;
-		//extern vector<assemblyInfo_t> ex_overlap;
-		//overlap.insert(overlap.end(), ex_overlap.begin(), ex_overlap.end());
-		toyAssembly(seq, 0, overlap.size());
+		createOverlapGraph(seq, 0, overlap.size());
 		cout << "Assembling reads...\n";
 		assembler(seq, seqOut);
 	}
-	
-	seqOut.close();
+#endif
 
+#if 0
+	seqOut.close();
+	seqan::clear(seq);
 	loadSeqData(asmFileName, ID, seq);
 	seqan::clear(ID);
 	kmerHashTable = createKmerHashTable(seq, false);
-	// filterKmer(kmerHashTable, kfFileName);
 	block1 = 0;
 	block2 = 0;
 	b_size = length(seq) / thread_i;
@@ -139,7 +163,7 @@ int main(int argc, char* argv[])
 	threadPool.clear();
 	malloc_trim(0);
 
-	seqOut.open(asmFileName);
+	seqOut.open("remove_dup.fasta");
 	std::set<size_t> all;
 	for (size_t i = 0; i < length(seq); i++)
 	{
@@ -158,7 +182,8 @@ int main(int argc, char* argv[])
 		seqOut << string{ a, end(seq[i]) } << endl;
 		seqOut << endl;
 	}
-#endif // 0
+#endif
+
 	cout << "done!\n";
 	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	outFile.close();

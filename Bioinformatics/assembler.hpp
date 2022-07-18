@@ -2,8 +2,7 @@
 #include "proccess.h"
 #include <boost/config.hpp>
 #include <boost/graph/bellman_ford_shortest_paths.hpp>
-#include <boost/graph/floyd_warshall_shortest.hpp>
-#include <boost/graph/random_spanning_tree.hpp>
+
 extern cwd::seqData_t assemblySeq;
 
 namespace cwd
@@ -49,61 +48,6 @@ namespace cwd
 
 		}
 	}
-
-	//void bellman_ford(const AGraph& g, int start)
-	//{
-	//	int n = num_vertices(g);
-	//	auto edges = boost::get(AEdge(), g);
-	//	edge_iterator e, eend;
-	//	tie(e, eend) = boost::edges(g);
-	//	vector<int> v_dis(n, 1);
-	//	v_dis[start] = 0;
-	//	vector<int> path(n, -1);
-	//	bool check = false;
-	//	for (int i = 0; i < n - 1; i++)
-	//	{
-	//		//对m条边进行循环
-	//		for (auto eit = e; eit != eend; eit++)
-	//		{
-	//			auto edge = edges[*eit];
-	//			auto to = target(*eit, g);
-	//			auto from = source(*eit, g);
-	//			// 松弛操作
-	//			if (v_dis[from] != 1 && v_dis[to] > v_dis[from] + edge.weight)
-	//			{
-	//				v_dis[to] = v_dis[from] + edge.weight;
-	//				path[to] = from;
-	//				check = true;
-	//			}
-	//		}
-	//		if (!check)
-	//		{
-	//			break;  //没有更新，提前退出循环结束算法
-	//		}
-	//	}
-	//	// 3. 检查是否存在负回路（负环）
-	//	bool hasCycle = false;
-	//	for (auto i = e; i != eend; i++)
-	//	{
-	//		auto edge = edges[*i];
-	//		auto to = target(*i, g);
-	//		auto from = source(*i, g);
-	//		if (v_dis[from] != 1 && v_dis[to] > v_dis[from] + edge.weight)
-	//		{
-	//			hasCycle = true;
-	//			break;
-	//		}
-	//	}
-	//	if (hasCycle)
-	//	{
-	//		cout << "存在负权环\n";
-	//	}
-	//	else
-	//	{
-	//		auto m = max_element(v_dis.begin(), v_dis.end());
-	//		printPath(v_dis, path, n, start);
-	//	}
-	//}
 
 	vector<vector<vertex_descriptor>> findPath(const AGraph & g, const seqData_t& seq, ofstream & outAssembly)
 	{
@@ -186,10 +130,22 @@ namespace cwd
 		out_edge_iterator e, eend;
 		std::set<vertex_descriptor> path;
 		vector<vertex_descriptor> vex;
+		int id = 1;
+		//ofstream seqOut("result_ecoli_debug22.fasta", ios_base::app);
 		for (auto v = vi; v != vend; v++)
 		{
 			vex.push_back(*v);
+			//auto assembly = seq[v_prop[*v].r];
+			//seqOut << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id++ % length(assembly) % 1;
+			//auto a = begin(assembly);
+			//for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+			//{
+			//	seqOut << string{ a, next(a, 1000) } << endl;
+			//}
+			//seqOut << string{ a, end(assembly) } << endl;
+			//seqOut << endl;
 		}
+		//return p_v;
 
 		for (auto& vs : vex)
 		{
@@ -198,12 +154,19 @@ namespace cwd
 				continue;
 			}
 			vector<vertex_descriptor> pt;
+			vector<vertex_descriptor> pt_pre;
+			vertex_descriptor rev_vs = -1;
+			vertex_descriptor rev_ve = -1;
 			pt.push_back(vs);
 			path.insert(vs);
 			AEdge::Adj adj;
 			bool preOrient = true;
-			cout << v_prop[vs].r << " (start)";
+			//cout << v_prop[vs].r << " (start)";
 			auto vx = vs;
+			auto prev_v = vs;
+			auto idx = 0;
+			bool flag_dup = false;
+			auto cnt = 0;
 			while (boost::out_degree(vx, g))
 			{
 				tie(e, eend) = boost::out_edges(vx, g);
@@ -257,16 +220,47 @@ namespace cwd
 				{
 					break;
 				}
+				else
+				{
+					auto break_flag = false;
+					for (auto& e : v_edge)
+					{
+						auto v = boost::target(e, g);
+						if (path.find(v) != path.end())
+						{
+							cnt++;
+							if (find(pt.begin(), pt.end(), v) != pt.end())
+							{
+								// record v;
+								rev_vs = v;
+							}
+							// record prev;
+							rev_ve = vx;
+							break;
+						}
+					}
+					if (cnt > 0)
+					{
+						break_flag = true;
+						cnt = 0;
+					}
+					if (break_flag)
+					{
+						path.insert(vs);
+						break;
+					}
+				}
 				sort(v_edge.begin(), v_edge.end(),
 					[&e_prop](edge_descriptor a, edge_descriptor b)
 				{
-					return e_prop[a] < e_prop[b];
+					return e_prop[a] > e_prop[b];
 				});
 				auto p = v_edge.begin();
 				auto orient = ovl_prop[*p].orient;
 				auto nextv = boost::target(*p, g);
 				while (!path.insert(nextv).second && ((p = std::next(p)) != v_edge.end()))
 				{
+					flag_dup = true;
 					nextv = boost::target(*p, g);
 					orient = ovl_prop[*p].orient;
 				}
@@ -276,6 +270,7 @@ namespace cwd
 					auto sp1 = v_prop[vx].r == ovl.r1 ? ovl.SP1 : ovl.SP2;
 					auto ep1 = v_prop[vx].r == ovl.r1 ? ovl.EP1 : ovl.EP2;
 					string ovl1 = { begin(seq[v_prop[vx].r]) + sp1,  begin(seq[v_prop[vx].r]) + ep1 };
+					prev_v = vx;
 					vx = nextv;
 					pt.push_back(nextv);
 					preOrient = orient;
@@ -283,25 +278,25 @@ namespace cwd
 					auto sp2 = v_prop[nextv].r == ovl.r2 ? ovl.SP2 : ovl.SP1;
 					auto ep2 = v_prop[nextv].r == ovl.r2 ? ovl.EP2 : ovl.EP1;
 					string ovl2 = { begin(seq[v_prop[nextv].r]) + sp2,  begin(seq[v_prop[nextv].r]) + ep2 };
-					cout << " -> " << v_prop[nextv].r << " (" << orient
-						<< boost::format("; adj: %u, SP1: %u; EP1: %u; SP2: %u; EP2: %u; %f")
-						% adj % sp1 % ep1 % sp2 % ep2 % hamming(ovl1, ovl2)
-						<< ") " << endl;
+					//cout << " -> " << v_prop[nextv].r << " (" << orient
+					//	<< boost::format("; adj: %u, SP1: %u; EP1: %u; SP2: %u; EP2: %u; %f")
+					//	% adj % sp1 % ep1 % sp2 % ep2 % hamming(ovl1, ovl2)
+					//	<< ") " << endl;
 				}
 				else
 				{
 					break;
 				}
 			}
-			cout << endl;
+			//cout << endl;
 			if (pt.size() > 1)
 			{
 				vx = pt[0];
 				auto f_e = boost::edge(vx, pt[1], g);
 				adj = adj_prop[f_e.first];
 				preOrient = ovl_prop[f_e.first].orient;
-				vector<vertex_descriptor> pt_pre;
 				in_edge_iterator e, eend;
+				auto cnt = 0;
 				while (boost::in_degree(vx, g))
 				{
 					tie(e, eend) = boost::in_edges(vx, g);
@@ -355,10 +350,47 @@ namespace cwd
 					{
 						break;
 					}
+					else
+					{
+						auto break_flag = false;
+						for (auto& e : v_edge)
+						{
+							auto v = boost::source(e, g);
+							if (path.find(v) != path.end())
+							{
+								cnt++;
+								if (find(pt.begin(), pt.end(), v) != pt.end())
+								{
+									// record v;
+									rev_vs = v;
+								}
+
+								else if (find(pt_pre.begin(), pt_pre.end(), v) != pt_pre.end())
+								{
+									// record v;
+									rev_vs = v;
+								}
+
+								rev_ve = vx;
+								break;
+							}
+						}
+						if (cnt > 0)
+						{
+							break_flag = true;
+							cnt = 0;
+						}
+						if (break_flag)
+						{
+							path.insert(vs);
+							break;
+						}
+					}
+
 					sort(v_edge.begin(), v_edge.end(),
 						[&e_prop](edge_descriptor a, edge_descriptor b)
 					{
-						return e_prop[a] < e_prop[b];
+						return e_prop[a] > e_prop[b];
 					});
 					auto p = v_edge.begin();
 					auto orient = ovl_prop[*p].orient;
@@ -366,11 +398,13 @@ namespace cwd
 					//cout << vs << " ";
 					while (!path.insert(nextv).second && ((p = std::next(p)) != v_edge.end()))
 					{
+						flag_dup = true;
 						nextv = boost::source(*p, g);
 						orient = ovl_prop[*p].orient;
 					}
 					if (p != v_edge.end())
 					{
+						prev_v = vx;
 						vx = nextv;
 						pt_pre.push_back(nextv);
 						preOrient = orient;
@@ -384,6 +418,20 @@ namespace cwd
 				}
 				std::reverse(pt_pre.begin(), pt_pre.end());
 				pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
+				auto i_rev_vs = find(pt.begin(), pt.end(), rev_vs);
+				auto i_rev_ve = find(pt.begin(), pt.end(), rev_ve);
+				if (i_rev_ve != pt.end() and i_rev_vs != pt.end())
+				{
+					if (i_rev_ve == pt.begin())
+					{
+						i_rev_ve = pt.end();
+						//std::reverse(i_rev_vs, i_rev_ve);
+					}
+					else
+					{
+						//std::reverse(std::next(i_rev_vs), std::next(i_rev_ve));
+					}
+				}
 			}
 
 			//cout << endl;
@@ -412,17 +460,16 @@ namespace cwd
 			//}
 			//std::reverse(pt_pre.begin(), pt_pre.end());
 			//pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
-			if (pt.size() > 2)
+			if (pt.size() > 0)
 			{
 				//std::reverse(pt.begin(), pt.end());
-				copy(pt.begin(), prev(pt.end()), ostream_iterator<int, char>(outAssembly, " -> "));
-				outAssembly << *pt.rbegin() << endl;
+				//copy(pt.begin(), prev(pt.end()), ostream_iterator<int, char>(outAssembly, " -> "));
+				//outAssembly << *pt.rbegin() << endl;
 				//cout << pt.size() << endl;
 				p_v.push_back(pt);
 			}
 
 		}
-		//vector<vector<vertex_descriptor>> p_debug;
 		//auto tmp = p_v[0];
 		//p_v.clear();
 		//for (auto i = tmp.begin(); i != tmp.end(); i++)
@@ -431,6 +478,116 @@ namespace cwd
 		//}
 		//p_v.push_back({ tmp.begin(), tmp.end() });
 		return p_v;
+		vector<vertex_descriptor> merge_p;
+		vector<vector<vertex_descriptor>> p_m;
+		for (auto& p : p_v)
+		{
+			auto v = *p.begin();
+			for (auto ip = p_v.begin() + 1; ip != p_v.end(); ip++)
+			{
+				auto ve = *ip->rbegin();
+				auto e = edge(*(p.begin() + 1), v, g);
+				auto ei = edge(v, ve, g);
+				if (ei.second)
+				{
+					auto adj = adj_prop[e.first];
+					auto adj2 = adj_prop[ei.first];
+					if (adj == AEdge::HeadTail)
+					{
+						if (adj2 == AEdge::HeadHead or adj2 == AEdge::HeadTail)
+						{
+							merge_p = *ip;
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::TailHead)
+					{
+						if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
+						{
+							merge_p = *ip;
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::HeadHead)
+					{
+						if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
+						{
+							merge_p = *ip;
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::TailTail)
+					{
+						if (adj2 == AEdge::HeadTail or adj2 == AEdge::HeadHead)
+						{
+							merge_p = *ip;
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+				}
+				else
+				{
+					p_m.push_back(*ip);
+				}
+			}
+			for (auto ip = p_v.begin() + 1; ip != p_v.end(); ip++)
+			{
+				auto ve = *ip->begin();
+				auto e = edge(*(p.begin() + 1), v, g);
+				auto ei = edge(v, ve, g);
+				if (ei.second)
+				{
+					auto adj = adj_prop[e.first];
+					auto adj2 = adj_prop[ei.first];
+					if (adj == AEdge::HeadTail)
+					{
+						if (adj2 == AEdge::HeadHead or adj2 == AEdge::HeadTail)
+						{
+							merge_p = *ip;
+							std::reverse(merge_p.begin(), merge_p.end());
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::TailHead)
+					{
+						if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
+						{
+							merge_p = *ip;
+							std::reverse(merge_p.begin(), merge_p.end());
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::HeadHead)
+					{
+						if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
+						{
+							merge_p = *ip;
+							std::reverse(merge_p.begin(), merge_p.end());
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+					else if (adj == AEdge::TailTail)
+					{
+						if (adj2 == AEdge::HeadTail or adj2 == AEdge::HeadHead)
+						{
+							merge_p = *ip;
+							std::reverse(merge_p.begin(), merge_p.end());
+							merge_p.insert(merge_p.end(), p.begin(), p.end());
+							p_m.push_back(merge_p);
+						}
+					}
+				}
+			}
+		}
+
+		return p_m;
 		//using aedge =  property_traits<weightMap>::value_type;
 		//int d[450][450];
 		//int paths[450][450];
@@ -564,6 +721,8 @@ namespace cwd
 	{
 		bool toPrev = false;
 		auto v_prop = boost::get(vertex_property_t(), g);
+		ofstream seqOut2("result_dmel_debug_frag.fasta", ios_base::app);
+
 		if (p.size() > 1)
 		{
 			auto assembly = seq[v_prop[p[0]].r];
@@ -571,6 +730,7 @@ namespace cwd
 			auto E_adj = get(&AEdge::adj, g);
 			auto orient = E_ovl[edge(p[0], p[1], g).first].orient;
 			bool shouldRev = !orient;
+
 			for (auto i = p.begin(); /*false && */i != prev(p.end()); i++)
 			{
 				auto e = edge(*i, *std::next(i), g).first;
@@ -582,7 +742,19 @@ namespace cwd
 				auto dr = v_prop[des].r;
 				E_ovl[e].r1;
 				E_ovl[e].r2;
+				//auto assembly2 = seq[v_prop[*std::next(i)].r];
+				//seqOut2 << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id % length(assembly2) % p.size();
+				//auto a = begin(assembly2);
+				//for (; a < prev(end(assembly2), 1000); std::advance(a, 1000))
+				//{
+				//	seqOut2 << string{ a, next(a, 1000) } << endl;
+				//}
+				//seqOut2 << string{ a, end(assembly2) } << endl;
+				//seqOut2 << endl;
+				//totalLen += length(assembly2);
+#if 1
 				auto a1 = E_adj[edge(p[0], p[1], g).first];
+				auto a2 = E_adj[e2];
 				if (a1 == AEdge::HeadTail || a1 == AEdge::TailTail)
 				{
 					toPrev = true;
@@ -591,11 +763,14 @@ namespace cwd
 				{
 					toPrev = false;
 				}
-				auto a2 = E_adj[e2];
 				orient = E_ovl[e].orient;
 				if (!orient)
 				{
 					shouldRev = !shouldRev;
+					if (i == p.begin())
+					{
+						assembly = revComp(string{ begin(assembly), end(assembly) });
+					}
 				}
 				if (e.m_eproperty)
 				{
@@ -639,7 +814,7 @@ namespace cwd
 					
 					assembly = concatReads(assembly, v_prop[des].r,
 						seq[v_prop[des].r], E_ovl[e], E_adj[e], shouldRev, toPrev);
-					 
+
 					//cout << "RES:\n";
 					//cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
 					//outAssembly << "RES:\n" << assembly << endl;
@@ -648,10 +823,11 @@ namespace cwd
 				{
 					continue;
 				}
+
+#endif // 0
 			}
 			if (true)
 			{
-				//std::reverse(begin(assembly) + rev1, end(assembly));
 				seqOut << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id % length(assembly) % p.size();
 				auto a = begin(assembly);
 				for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
@@ -665,6 +841,21 @@ namespace cwd
 			}
 			//cout << "total: " << length(assembly) << endl;
 		}
+
+		else
+		{
+			auto assembly = seq[v_prop[p[0]].r];
+			seqOut << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id % length(assembly) % p.size();
+			auto a = begin(assembly);
+			for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+			{
+				seqOut << string{ a, next(a, 1000) } << endl;
+			}
+			seqOut << string{ a, end(assembly) } << endl;
+			seqOut << endl;
+			totalLen += length(assembly);
+		}
+
 	}
 
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, cwd::AEdge::Adj adj, bool shouldRev, bool toPrev)
@@ -730,3 +921,148 @@ namespace cwd
 }
 
 
+//for (auto& pp : p_v)
+//{
+//	auto t = find(pp.begin(), pp.end(), v);
+//	if (t != pp.end())
+//	{
+//		auto connected = false;
+//		auto Len1 = std::distance(t, pp.end());
+//		auto Len2 = std::distance(pp.begin(), t);
+//		if (Len1 >= pp.size() * 0.2 && Len1 >= pp.size() * 0.2)
+//		{
+//			break;
+//		}
+//		if (Len1 > Len2)
+//		{
+//			// head
+//			if (t == pp.end())
+//			{
+//				break;
+//			}
+//			auto f_e = boost::edge(*t, *std::next(t), g);
+//			if (!f_e.second)
+//			{
+//				break;
+//			}
+//			adj = adj_prop[f_e.first];
+//			preOrient = ovl_prop[f_e.first].orient;
+//			if (preOrient)
+//			{
+//				if (adj == AEdge::HeadTail)
+//				{
+//					if (adj_prop[e] == AEdge::TailTail or adj_prop[e] == AEdge::HeadTail)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else if (adj == AEdge::TailHead)
+//				{
+//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else
+//				{
+//					;
+//				}
+//			}
+//			else
+//			{
+//				if (adj == AEdge::HeadHead)
+//				{
+//					if (adj_prop[e] == AEdge::HeadTail or adj_prop[e] == AEdge::TailTail)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else if (adj == AEdge::TailTail)
+//				{
+//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else
+//				{
+//					;
+//				}
+//			}
+//			if (Len2 > pt.size())
+//			{
+//				break;
+//			}
+//			auto pos = pp.erase(pp.begin(), t);
+//			std::reverse(pt.begin(), pt.end());
+//			pp.insert(pos, pt.begin(), pt.end());
+//			break;
+//		}
+//		else
+//		{
+//			//tail
+//			if (t == pp.begin())
+//			{
+//				break;
+//			}
+//			auto f_e = boost::edge(*std::prev(t), *t, g);
+//			if (!f_e.second)
+//			{
+//				break;
+//			}
+//			adj = adj_prop[f_e.first];
+//			preOrient = ovl_prop[f_e.first].orient;
+//			if (preOrient)
+//			{
+//				if (adj == AEdge::HeadTail)
+//				{
+//					if (adj_prop[e] == AEdge::TailTail or adj_prop[e] == AEdge::HeadTail)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else if (adj == AEdge::TailHead)
+//				{
+//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else
+//				{
+//					;
+//				}
+//			}
+//			else
+//			{
+//				if (adj == AEdge::HeadHead)
+//				{
+//					if (adj_prop[e] == AEdge::HeadTail or adj_prop[e] == AEdge::TailTail)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else if (adj == AEdge::TailTail)
+//				{
+//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
+//					{
+//						connected = true;
+//					}
+//				}
+//				else
+//				{
+//					;
+//				}
+//			}
+//
+//			if (Len2 > pt.size())
+//			{
+//				break;
+//			}
+//			auto pos = pp.erase(std::next(t), pp.end());
+//			pp.insert(pos, pt.begin(), pt.end());
+//			break;
+//		}
+//	}
+//}
+//break;

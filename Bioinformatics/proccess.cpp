@@ -2,19 +2,24 @@
 #include "assembler.hpp"
 #include <boost/graph/copy.hpp>
 #include "boost/graph/depth_first_search.hpp"
+#include <malloc.h>
+
 using namespace std;
 using namespace seqan;
 using namespace cwd;
 void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
 
-
 mutex fileMutex;
 mutex overlapMutex;
+
 uint KMER_STEP = 1;
-const int KMER_LIMIT = 51;
-const int OVL_TIP_LEN = 100;
-const int CHAIN_LEN = 2;
-const double DETECT_RATIO = 0.3;
+int KMER_LIMIT = 51;
+int thread_i = 9;
+int OVL_TIP_LEN = 200;// *80;
+int CHAIN_LEN = 2;
+double DETECT_RATIO = 0.2;
+int genomeSize = 100 * 1000000 * 1.0; //5000000;
+
 vector<shared_ptr<list<assemblyInfo_t>>> assemblyChain;
 shared_ptr<AGraph> assemblyGraph;
 vector<assemblyInfo_t> overlap;
@@ -81,7 +86,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector
 	{
 		uint d1 = 0;
 		uint d2 = 0;
-		if (ix->SP2 < nextx->SP2 && ix->orient && nextx->orient || ix->SP2 > nextx->SP2 && !ix->orient && !nextx->orient)
+		if (nextx->SP1 - ix->SP1 < 40 || ix->SP2 < nextx->SP2 && ix->orient && nextx->orient || ix->SP2 > nextx->SP2 && !ix->orient && !nextx->orient)
 		{
 			if (ix->SP2 < nextx->SP2)
 			{
@@ -205,14 +210,11 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	}
 	return 0;
 }
-
+std::set<size_t> delReads;
 vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
-	//auto r1 = chain.begin();
-	//auto r2 = find_if(r1, chain.end(), [](alignInfo_t& a) { return a.orient == false && a.SP1 == numeric_limits<uint>::max() && a.SP2 == numeric_limits<uint>::max(); });
 	vector<assemblyInfo_t> res;
-	//auto ch = *max_element(chain_v.begin(), chain_v.end(), [](shared_ptr<list<alignInfo_t>>& a, shared_ptr<list<alignInfo_t>>& b) { return a->size() < b->size();});
-	//auto ch = chain_v[0];
+	auto sumLen = 0;
 	for (auto& ch : chain_v)
 	{
 		if (ch->size() > chainLen)
@@ -233,27 +235,28 @@ vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& 
 			a.EP2 = ovl_end2;
 			a.orient = ch->begin()->orient;
 			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
-			if (len > ovLen && chain_v.size() < 3)
+			sumLen += len;
+			auto ratio = 1.0 * sumLen / min(len1, len2);
+			if (len > ovLen && ratio < 0.95)
 			{
 				res.push_back(a);
 			}
-			else
+			else if (ratio > 0.99)
 			{
-				//res.push_back(a);
+				//delReads.insert(len1 > len2 ? i : r);
 			}
 		}
-		//r1 = next(r2);
-		//r2 = find_if(r1, chain_v.end(), [](alignInfo_t a) { return a.orient == false && a.SP1 == F_END.SP1 && a.SP2 == F_END.SP2; });
 	}
 	
-	//uint P1 = chain.begin()->SP1; // P1
-	//uint Q1 = min_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
-	//uint Pnk = prev(chain.end())->SP1 + KMER_LEN; // Pn + k
-	//uint Qnk = max_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
+/*	
+	uint P1 = chain.begin()->SP1; // P1
+	uint Q1 = min_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
+	uint Pnk = prev(chain.end())->SP1 + KMER_LEN; // Pn + k
+	uint Qnk = max_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
 
-	//uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
-	//ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
-/*	if (P1 > Q1 && len1 - Pnk <= len2 - Qnk)
+	uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
+	ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
+	if (P1 > Q1 && len1 - Pnk <= len2 - Qnk)
 	{
 		ovl_str1 = P1 - Q1;// -1;
 		ovl_end1 = len1 - 1;
@@ -300,15 +303,7 @@ unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(kmerHashTable_t& kmer
 		auto range = rangeP;
 		bool orient = true;
 		int d = distance(range.first, range.second);
-		//{
-//			std::default_random_engine dre;
-//			std::uniform_int_distribution<int> di(0, 30);
-//			int x = di(dre);
-//			kmer1[x] = revComp(kmer1.c_str() + x)[0];
-//			rangeP = kmerHashTable.equal_range(kmer1);
-//			rangeN = kmerHashTable.equal_range(revComp(kmer1));
-//			range = rangeP;
-		//}
+
 		if (distance(rangeP.first, rangeP.second) < distance(rangeN.first, rangeN.second))
 		{
 			orient = false;
@@ -378,7 +373,7 @@ void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>
 
 	//for (auto& ovl : v_ovl)
 	//{
-	//	if (ovl.EP1 - ovl.SP1 > 600 && ovl.EP2 - ovl.SP2 > 600)
+	//	if (ovl.EP1 - ovl.SP1 > ovLen && ovl.EP2 - ovl.SP2 > ovLen)
 	//	{
 	//		outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u, %u\n")
 	//			% r % i % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[r]) % length(seq[i]);
@@ -414,10 +409,11 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 			else
 			{
 				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
-				//cout << commonKmerSet.size() << endl;
+				kmerSet->erase(i);
+				//malloc_trim(0);
 				if (commonKmerSet.size() > 0)
 				{
-					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
+					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 1000, 2000, 0.2, r, i);
 					if (chain_v.size() > 0)
 					{
 						lock_guard<mutex> lock(fileMutex);
@@ -429,23 +425,6 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		//seqan::clear(seq[r]);
 	}
 	cout << boost::format("mapped %d - %d reads.\n") % block1 % block2;
-	//std::sort(info.begin(), info.end(), 
-	//	[](assemblyInfo_t& a, assemblyInfo_t& b)
-	//	{
-	//		if (a.r1 < b.r1)
-	//		{
-	//			return true;
-	//		}
-	//		else if (a.r1 == b.r1)
-	//		{
-	//			return (a.r2 < b.r2);
-	//		}
-	//		else
-	//		{
-	//			return false;
-	//		}
-	//	});
-	//assembler();
 }
 
 void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
@@ -485,17 +464,29 @@ void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
 		AGraph g;
 		copy_graph(aGraph, g);
 		boost::write_graphviz(outAssembly, g, boost::make_label_writer(boost::get(vertex_property_t(), aGraph)),
-		make_edge_writer(boost::get(&AEdge::adj, g)));
+		make_edge_writer(boost::get(&AEdge::adj, g), boost::get(&AEdge::weight, g)));
 		outAssembly << endl;
 		outPath << "Graph: " << i++;
 		auto ps = findPath(g, seq, outPath);
-		//std::set<int> sp(p.begin(), p.end());
+		sort(ps.begin(), ps.end(), 
+			[](vector<vertex_descriptor>& a, vector<vertex_descriptor>& b) 
+		{
+			return a.size() > b.size();
+		});
+		float sum = 0;
 		for (auto& p : ps)
 		{
-			if (totalLen <= 4600000)
+			sum += p.size();
+		}
+		sum /= ps.size();
+		for (auto& p : ps)
+		{
+			if (totalLen < genomeSize)
 			{
 				generateContig(g, p, seq, seqOut, i++, totalLen);
 			}
+			copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outPath, " -> "));
+			outPath << *p.rbegin() << endl;
 		}
 		//break;
 		//set_union(un.begin(), un.end(), sp.begin(), sp.end(), inserter(un, un.begin()));
@@ -533,52 +524,11 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 	
 	string gap1 = { begin(read1) + s, begin(read1) + s + d };
 	string gap2 = { begin(read2) + s2, begin(read2) + s2 + d };
-	/*kmer_t kmer1, kmer2;
-	int count = 0;
-	for (auto i = begin(read1) + s; i < begin(read1) + e - SKMER_LEN; i++)
+	if (!orient)
 	{
-		for (auto j = begin(read2) + s; j < begin(read2) + e - SKMER_LEN;)
-		{
-			int a = distance(begin(read2), j), b = distance(begin(read1), i);
-			if (a > b)
-			{
-				t = a - b;
-				if (t >= SKMER_LEN)
-				{
-					break;
-				}
-			}
-			else
-			{
-				t = b - a;
-				if (t >= SKMER_LEN)
-				{
-					j += t;
-				}
-			}
-			kmer1 = { i, i + SKMER_LEN };
-			kmer2 = { j, j + SKMER_LEN };
-			if (kmer1 == kmer2)
-			{
-				count++;
-				j += SKMER_LEN;
-				i += SKMER_LEN;
-			}
-			else
-			{
-				j++;
-			}
-		}
+		gap2 = cwd::revComp(gap2);
 	}
-	if (count > 1)
-	{
-		float score = float(count) / (float(e - s ) / SKMER_LEN);
-		if (score > 0.5)
-		{
-			return true;
-		}
-	}*/
-	return hamming(gap1, gap2) < 0.1f;
+	return hamming(gap1, gap2) < 0.5f;
 }
 
 std::string cwd::getCurrentDate()
@@ -635,7 +585,7 @@ float cwd::hamming(string& a, string& b)
 	return (float)disCount / (float)a.length();
 }
 
-void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
+void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 {
 	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 	vertex_descriptor src, dst;
@@ -654,15 +604,10 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 			uint i = ovl.r2;
 			uint len_r = length(seq[r]);
 			uint len_i = length(seq[i]);
-			string ovl1 = { begin(seq[r]) + ovl.SP1,  begin(seq[r]) + ovl.EP1 };
-			string ovl2 = { begin(seq[i]) + ovl.SP2,  begin(seq[i]) + ovl.EP2 };
-			double weight = -1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * (1 - hamming(ovl1, ovl2));
 			bool isHeadTail = false, isTailHead = false, isHeadHead = false, isTailTail = false;
 			if (
 				(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && ovl.orient) ||
 				(isHeadTail = len_i - ovl.EP2 < OVL_TIP_LEN && ovl.SP1 < OVL_TIP_LEN && ovl.orient) ||
-				//(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient) ||
-				//(isHeadTail = ovl.SP2 < OVL_TIP_LEN && ovl.SP1 < OVL_TIP_LEN && !ovl.orient) ||
 				(isHeadHead = ovl.SP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && !ovl.orient) ||
 				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
 				) //TODO direction
@@ -702,7 +647,24 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 						assemblyChain.push_back(n_chain);
 					}
 				}
-				
+				string ovl1 = { begin(seq[r]) + ovl.SP1,  begin(seq[r]) + ovl.EP1 };
+				string ovl2 = { begin(seq[i]) + ovl.SP2,  begin(seq[i]) + ovl.EP2 };
+				if (!ovl.orient)
+				{
+					ovl2 = cwd::revComp(ovl2);
+				}
+				auto precision = 1.0f - hamming(ovl1, ovl2);
+				if (precision < 0.99f)
+				{
+					continue;
+				}
+				if (delReads.find(r) != delReads.end() || delReads.find(i) != delReads.end())
+				{
+					continue;
+				}
+				double weight = 1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * precision;
+				//double weight = 1.0 * (ovl.EP1 - ovl.SP1) * precision;
+
 				auto& aGraph = assemblyGraph;
 				boost::graph_traits<AGraph>::vertex_iterator vi, vi_end;
 				boost::tie(vi, vi_end) = boost::vertices(*aGraph);
@@ -727,10 +689,10 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 						if (vx2 != vi_end)
 						{
 							auto e = boost::edge(*vx, *vx2, *aGraph);
-							if (e.first.m_eproperty)
+							if (e.second)
 							{
 								auto edg = e.first;
-								if (e_prop[edg] > weight)
+								if (e_prop[edg] < weight)
 								{
 									e_prop[edg] = weight;
 								}
@@ -812,7 +774,7 @@ void cwd::toyAssembly(seqData_t& seq, int block1, int block2)
 							if (e.first.m_eproperty)
 							{
 								auto edg = e.first;
-								if (e_prop[edg] > weight)
+								if (e_prop[edg] < weight)
 								{
 									e_prop[edg] = weight;
 								}
@@ -973,6 +935,7 @@ void cwd::DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited)
 std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	std::set<size_t> res;
+	auto sumlen = 0;
 	for (auto& ch : chain_v)
 	{
 		if (ch->size() > chainLen)
@@ -993,10 +956,11 @@ std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain
 			a.EP2 = ovl_end2;
 			a.orient = ch->begin()->orient;
 			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
-			if (len >= min(len1, len2) * 0.95)
+			sumlen += len;
+			float ratio = float(sumlen) / min(len1, len2);
+			if (ratio > 0.6)
 			{
-				res.insert(r);
-				res.insert(i);
+				res.insert(len1 > len2 ? i : r);
 			}
 		}
 	}

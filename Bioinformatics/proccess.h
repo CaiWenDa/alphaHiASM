@@ -29,13 +29,11 @@
 namespace cwd {
 	using namespace std;
 	const uint KMER_LEN = 31;
-	const int thread_i = 24;
 	template<typename T1, typename T2, typename T3 = std::hash<T1>>
 	using hash = std::unordered_multimap<T1, T2, T3>;
 	typedef struct {
 		uint readID;
-		uint begin;
-		// uint end;
+		ushort begin;
 	} hashValue_t;
 	typedef std::string kmer_t;
 	struct kmer_hash {
@@ -64,32 +62,33 @@ namespace cwd {
 	typedef numPair_t posPair_t;
 
 	typedef struct {
-		uint SP1;
-		uint SP2;
-		uint EP1;
-		uint EP2;
+		ushort SP1;
+		ushort SP2;
+		ushort EP1;
+		ushort EP2;
 		bool orient = true;
 	} overlapInfo_t;
 
 	typedef struct {
 		bool orient = true;
-		uint SP1;
-		uint SP2;
+		ushort SP1;
+		ushort SP2;
 	} alignInfo_t;
 
 	typedef struct assemblyInfo_t {
 		uint r1, r2;
-		uint SP1;
-		uint EP1;
-		uint SP2;
-		uint EP2;
+		ushort SP1;
+		ushort EP1;
+		ushort SP2;
+		ushort EP2;
 		bool orient = true;
+		//float precision = 0;
 	} assemblyInfo_t;
 
 	typedef struct AVertex {
 		uint r;
-		uint SP;
-		uint EP;
+		ushort SP;
+		ushort EP;
 		bool orient = true;
 
 		friend ostream & operator<<(ostream& out, const AVertex& v)
@@ -106,7 +105,7 @@ namespace cwd {
 		} adj;
 
 		assemblyInfo_t ovl;
-		double weight = -1;
+		double weight = 1.0;
 
 		friend ostream& operator<<(ostream& out, const AEdge& e)
 		{
@@ -124,24 +123,25 @@ namespace cwd {
 		typedef boost::edge_property_tag kind;
 	};
 
-	template <class WeightMap>
+	template <class WeightMap, class weight>
 	class edge_writer
 	{
 	public:
-		edge_writer(WeightMap w) : wm(w) {}
+		edge_writer(WeightMap w, weight n) : wm(w), wn(n) {}
 
 		template <class Edge>
 		void operator()(ostream& out, const Edge& e) const {
-			out << "[label=\"" << bitset<2>(wm[e]) << "\"]";
+			out << "[label=\"" << bitset<2>(wm[e]) << ", " << wn[e] << "\"]";
 		}
 	private:
 		WeightMap wm;
+		weight wn;
 	};
 
-	template <class WeightMap>
-	inline edge_writer<WeightMap> make_edge_writer(WeightMap w)
+	template <class WeightMap, class weight>
+	inline edge_writer<WeightMap, weight> make_edge_writer(WeightMap w, weight n)
 	{
-		return edge_writer<WeightMap>(w);
+		return edge_writer<WeightMap, weight>(w, n);
 	}
 
 	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::bidirectionalS, boost::property<vertex_property_t, AVertex>, AEdge>;
@@ -200,7 +200,7 @@ namespace cwd {
 	std::string getCurrentDate();
 	float jaccard(string& a, string& b);
 	float hamming(string& a, string& b);
-	void toyAssembly(seqData_t& seq, int block1, int block2);
+	void createOverlapGraph(seqData_t& seq, int block1, int block2);
 	void connected_components_subgraphs(AGraph const& g);
 	bool isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b);
 	void DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited);
