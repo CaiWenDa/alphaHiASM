@@ -1,5 +1,67 @@
 ﻿#include "proccess.h"
 #include <malloc.h>
+#include<getopt.h>
+
+extern int optind, opterr, optopt;
+extern char* optargi;
+
+int parseOption(int argc, char* argv[], std::string& file, std::string& outFile, int& genomeSize, int& thread_i)
+{
+	int index = 0;
+	int c = 0; //用于接收选项
+	//定义长选项
+	static struct option long_options[] =
+	{
+		{"help", no_argument, NULL, 'h'},
+		{"file", required_argument, NULL, 'f'},
+		{"output", required_argument, NULL, 'o'},
+		{"genomeSize", required_argument, NULL, 'g'},
+		{"theads", required_argument, NULL, 't'}
+	};
+
+	/*循环处理参数*/
+	while (EOF != (c = getopt_long(argc, argv, "hf:o:g:t:", long_options, &index)))
+	{
+		using std::cerr;
+		using std::endl;
+		switch (c)
+		{
+		case 'h':
+			//printf("we get option -h, index %d\n", index);
+			cerr << 
+			"usage: ToyAssembly \n\
+		--file - file_1[file_2 ...]\n\
+		--outfile - dir PATH\n\
+		--genome - size SIZE\n\
+		--threads int\n\
+		[--min - overlap SIZE]\n\
+		[--help]\n\
+		[--read - error float]\n";
+			break;
+		case 'f':
+			file = optarg;
+			break;
+			//-n选项必须要参数
+		case 'o':
+			outFile = optarg;
+			break;
+		case 'g':
+			genomeSize = atoi(optarg);
+			break;
+		case 't':
+			thread_i = atoi(optarg);
+			break;
+			//表示选项不支持
+		case '?':
+			//printf("unknow option: %c\n", optopt);
+			cerr << "unknow option: " << char(optopt) << endl;
+			break;
+		default:
+			break;
+		}
+	}
+	return 0;
+}
 
 void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
 
@@ -11,22 +73,21 @@ int main(int argc, char* argv[])
 	int ovLen = 2000;
 	extern int thread_i;
 	extern int genomeSize;
-	genomeSize = atoi(argv[4]);
-	thread_i = atoi(argv[1]);
-	if (argc <= 4)
-	{
-	    return 0;
-	}
 	//string seqFileName = "/home/caiwenda/dmel.trimmedReads_20x.fasta";
-	string seqFileName = argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
-	string asmFileName = argv[3];//"result_chm13_debug713.fasta";
+	string seqFileName = "";//argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
+	string asmFileName = "";//argv[3];//"result_chm13_debug713.fasta";
 	//string asmFileName = "tmp.fasta";
 	string outFilePre = getCurrentDate();
 	//string seqFileName = "result_ecoli_debug.fasta";
 	string kfFileName = "/home/caiwenda/ecoli_kmerFrequency.txt";
 	//string seqFileName = "dmel.trimmedReads_10x.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
-	cout << "seqFile : " << seqFileName << endl;
+	parseOption(argc, argv, seqFileName, asmFileName, genomeSize, thread_i);
+	if (argc <= 4)
+	{
+		return 0;
+	}
+	cerr << "seqFile : " << seqFileName << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
 	seqData_t seq;
 	StringSet<CharString> ID;
@@ -44,7 +105,7 @@ int main(int argc, char* argv[])
 	ofstream seqOut(asmFileName, ios_base::out);
 	//ofstream seqOut;
 	vector<thread> threadPool;
-	cout << "Detecting Overlap...\n";
+	cerr << "Detecting Overlap...\n";
 #if 1
 	for (size_t i = 0; i < thread_i; i++)
 	{
@@ -68,11 +129,38 @@ int main(int argc, char* argv[])
 	malloc_trim(0);
 	//boost::thread_group tg;
 	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));
-	cout << "Creating Overlap Graph...\n";
+	cerr << "Creating Overlap Graph...\n";
 	extern vector<assemblyInfo_t> overlap;
 	createOverlapGraph(seq, 0, overlap.size());
-	cout << "Assembling reads...\n";
+	cerr << "Assembling reads...\n";
 	assembler(seq, seqOut);
+
+	if (false)
+	{
+		std::set<size_t> all;
+		for (size_t i = 0; i < length(seq); i++)
+		{
+			all.insert(i);
+		}
+		extern std::set<size_t> delReads;
+		std::set<size_t> una;
+		set_difference(all.begin(), all.end(), delReads.begin(), delReads.end(), inserter(una, una.end()));
+		if (!una.empty())
+		{
+			for (auto& i : una)
+			{
+				auto assembly = seq[i];
+				seqOut << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % (length(seq) + i) % length(assembly) % 1;
+				auto a = begin(assembly);
+				for (; a < prev(end(assembly), 1000); std::advance(a, 1000))
+				{
+					seqOut << string{ a, next(a, 1000) } << endl;
+				}
+				seqOut << string{ a, end(assembly) } << endl;
+				seqOut << endl;
+			}
+		}
+	}
 
 	//ifstream overlapFile;
 	//assemblyInfo_t ovl;
@@ -184,8 +272,8 @@ int main(int argc, char* argv[])
 	}
 #endif
 
-	cout << "done!\n";
-	cout << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
+	cerr << "done!\n";
+	cerr << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	outFile.close();
 	seqOut.close();
 	getchar();
@@ -197,13 +285,13 @@ void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint sta
 	using namespace std;
 	if (!orient)
 	{
-		cout << string{ begin(seq[r1]) + start1, begin(seq[r1]) + start1 + len } << endl;
-		cout << cwd::revComp(string{ begin(seq[r2]) + end2 - len, begin(seq[r2]) + end2 }) << endl;
+		cerr << string{ begin(seq[r1]) + start1, begin(seq[r1]) + start1 + len } << endl;
+		cerr << cwd::revComp(string{ begin(seq[r2]) + end2 - len, begin(seq[r2]) + end2 }) << endl;
 
 	}
 	else
 	{
-		cout << string{ begin(seq[r1]) + start1, begin(seq[r1]) + start1 + len } << endl;
-		cout << string{ begin(seq[r2]) + start2, begin(seq[r2]) + start2 + len } << endl;
+		cerr << string{ begin(seq[r1]) + start1, begin(seq[r1]) + start1 + len } << endl;
+		cerr << string{ begin(seq[r2]) + start2, begin(seq[r2]) + start2 + len } << endl;
 	}
 }

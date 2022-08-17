@@ -31,9 +31,10 @@ namespace cwd {
 	const uint KMER_LEN = 31;
 	template<typename T1, typename T2, typename T3 = std::hash<T1>>
 	using hash = std::unordered_multimap<T1, T2, T3>;
+	using dnaPos_t = ushort;
 	typedef struct {
 		uint readID;
-		ushort begin;
+		dnaPos_t begin;
 	} hashValue_t;
 	typedef std::string kmer_t;
 	struct kmer_hash {
@@ -62,33 +63,33 @@ namespace cwd {
 	typedef numPair_t posPair_t;
 
 	typedef struct {
-		ushort SP1;
-		ushort SP2;
-		ushort EP1;
-		ushort EP2;
+		dnaPos_t SP1;
+		dnaPos_t SP2;
+		dnaPos_t EP1;
+		dnaPos_t EP2;
 		bool orient = true;
 	} overlapInfo_t;
 
 	typedef struct {
 		bool orient = true;
-		ushort SP1;
-		ushort SP2;
+		dnaPos_t SP1;
+		dnaPos_t SP2;
 	} alignInfo_t;
 
 	typedef struct assemblyInfo_t {
 		uint r1, r2;
-		ushort SP1;
-		ushort EP1;
-		ushort SP2;
-		ushort EP2;
+		dnaPos_t SP1;
+		dnaPos_t EP1;
+		dnaPos_t SP2;
+		dnaPos_t EP2;
 		bool orient = true;
 		//float precision = 0;
 	} assemblyInfo_t;
 
 	typedef struct AVertex {
 		uint r;
-		ushort SP;
-		ushort EP;
+		dnaPos_t SP;
+		dnaPos_t EP;
 		bool orient = true;
 
 		friend ostream & operator<<(ostream& out, const AVertex& v)

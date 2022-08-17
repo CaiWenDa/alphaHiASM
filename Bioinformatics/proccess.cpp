@@ -33,7 +33,7 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 	uint readID = 0;
 	std::default_random_engine dre;
 	std::uniform_int_distribution<int> di(1, KMER_LIMIT);
-	cout << "Creating HashTable...\n";
+	cerr << "Creating HashTable...\n";
 	for (auto& read : seq)
 	{
 		int dlen = length(read) * DETECT_RATIO;
@@ -71,7 +71,7 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 		}
 		readID++;
 	}
-	cout << "HashTable has been created!\n";
+	cerr << "HashTable has been created!\n";
 	return kmerHashTable;
 }
 
@@ -331,9 +331,9 @@ void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqD
 {
 	StringSet<CharString> id;
 	SeqFileIn seqFileIn(seqFileName.c_str());
-	cout << "Reading seqFile...\n";
+	cerr << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
-	cout << "seqFile has been read.\n";
+	cerr << "seqFile has been read.\n";
 	//ofstream dict("dict3.txt", ios_base::out);
 	//int i = 0;
 	//for (auto& str : id)
@@ -424,7 +424,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		}
 		//seqan::clear(seq[r]);
 	}
-	cout << boost::format("mapped %d - %d reads.\n") % block1 % block2;
+	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 }
 
 void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
@@ -612,6 +612,8 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
 				) //TODO direction
 			{
+				delReads.insert(r);
+				delReads.insert(i);
 				if (0)
 				{
 					for (auto& chain : assemblyChain)
@@ -658,10 +660,10 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 				{
 					continue;
 				}
-				if (delReads.find(r) != delReads.end() || delReads.find(i) != delReads.end())
-				{
-					continue;
-				}
+				//if (delReads.find(r) != delReads.end() || delReads.find(i) != delReads.end())
+				//{
+				//	continue;
+				//}
 				double weight = 1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * precision;
 				//double weight = 1.0 * (ovl.EP1 - ovl.SP1) * precision;
 
@@ -722,7 +724,7 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 								}
 								else
 								{
-									cout << "none\n";
+									cerr << "none\n";
 								}
 
 							}
@@ -756,7 +758,7 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 							}
 							else
 							{
-								cout << "none\n";
+								cerr << "none\n";
 							}
 							//TODO: condition of direction
 						}
@@ -804,7 +806,7 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 								}
 								else
 								{
-									cout << "none\n";
+									cerr << "none\n";
 								}
 							}
 							//add to an overlap vector
@@ -837,7 +839,7 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 							}
 							else
 							{
-								cout << "none\n";
+								cerr << "none\n";
 							}
 							//TODO: condition of direction
 						}
@@ -873,7 +875,7 @@ void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
 					}
 					else
 					{
-						cout << "none\n";
+						cerr << "none\n";
 					}
 				}
 			}
@@ -999,5 +1001,5 @@ void cwd::mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Stri
 			}
 		}
 	}
-	cout << boost::format("mapped %d - %d reads.\n") % block1 % block2;
+	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 }

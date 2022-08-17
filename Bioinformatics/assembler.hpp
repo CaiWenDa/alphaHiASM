@@ -26,24 +26,24 @@ namespace cwd
 			{
 				string s1 = { begin(r1) + start1, begin(r1) + start1 + len };
 				string s2 = cwd::revComp(string{ begin(r2) + end2 - len, begin(r2) + end2 });
-				cout << string{ begin(r1),  begin(r1) + 30 } + "...";
-				cout << string{ s1.begin(), s1.begin() + 30 } + "..." + string{ s1.end() - 30, s1.end() };
-				cout << "..." + string{end(r1) - 30,  end(r1)} << endl;
-				cout << string{ begin(r2),  begin(r2) + 30 } + "...";
-				cout << string{ s2.begin(), s2.begin() + 30 } + "..." + string{ s2.end() - 30, s2.end() };
-				cout << "..." + string{ end(r2) - 30,  end(r2) } << endl;
+				cerr << string{ begin(r1),  begin(r1) + 30 } + "...";
+				cerr << string{ s1.begin(), s1.begin() + 30 } + "..." + string{ s1.end() - 30, s1.end() };
+				cerr << "..." + string{end(r1) - 30,  end(r1)} << endl;
+				cerr << string{ begin(r2),  begin(r2) + 30 } + "...";
+				cerr << string{ s2.begin(), s2.begin() + 30 } + "..." + string{ s2.end() - 30, s2.end() };
+				cerr << "..." + string{ end(r2) - 30,  end(r2) } << endl;
 			}
 				
 			else
 			{
 				string s1 = { begin(r1) + start1, begin(r1) + start1 + len };
 				string s2 = { begin(r2) + start2, begin(r2) + start2 + len };
-				cout << string{ begin(r1),  begin(r1) + 30 } + "...";
-				cout << string{ s1.begin(), s1.begin() + 30 } + "..." + string{ s1.end() - 30, s1.end() };
-				cout << "..." + string{ end(r1) - 30,  end(r1) } << endl;
-				cout << string{ begin(r2),  begin(r2) + 30 } + "...";
-				cout << string{ s2.begin(), s2.begin() + 30 } + "..." + string{ s2.end() - 30, s2.end() };
-				cout << "..." + string{ end(r2) - 30,  end(r2) } << endl;
+				cerr << string{ begin(r1),  begin(r1) + 30 } + "...";
+				cerr << string{ s1.begin(), s1.begin() + 30 } + "..." + string{ s1.end() - 30, s1.end() };
+				cerr << "..." + string{ end(r1) - 30,  end(r1) } << endl;
+				cerr << string{ begin(r2),  begin(r2) + 30 } + "...";
+				cerr << string{ s2.begin(), s2.begin() + 30 } + "..." + string{ s2.end() - 30, s2.end() };
+				cerr << "..." + string{ end(r2) - 30,  end(r2) } << endl;
 			}
 
 		}
@@ -239,7 +239,7 @@ namespace cwd
 							break;
 						}
 					}
-					if (cnt > 0)
+					if (cnt < 0)
 					{
 						break_flag = true;
 						cnt = 0;
@@ -375,7 +375,7 @@ namespace cwd
 								break;
 							}
 						}
-						if (cnt > 0)
+						if (cnt < 0)
 						{
 							break_flag = true;
 							cnt = 0;
@@ -855,7 +855,6 @@ namespace cwd
 			seqOut << endl;
 			totalLen += length(assembly);
 		}
-
 	}
 
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t & ovl, cwd::AEdge::Adj adj, bool shouldRev, bool toPrev)
