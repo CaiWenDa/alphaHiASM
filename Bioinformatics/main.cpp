@@ -1,6 +1,9 @@
-﻿#include "proccess.h"
+﻿#include "assembly.h"
+#include "utility.h"
+#include <cstdlib>
 #include <malloc.h>
-#include<getopt.h>
+#include <getopt.h>
+#include <iostream>
 
 extern int optind, opterr, optopt;
 extern char* optargi;
@@ -27,7 +30,6 @@ int parseOption(int argc, char* argv[], std::string& file, std::string& outFile,
 		switch (c)
 		{
 		case 'h':
-			//printf("we get option -h, index %d\n", index);
 			cerr << 
 			"usage: ToyAssembly \n\
 		--file - file_1[file_2 ...]\n\
@@ -53,8 +55,7 @@ int parseOption(int argc, char* argv[], std::string& file, std::string& outFile,
 			break;
 			//表示选项不支持
 		case '?':
-			//printf("unknow option: %c\n", optopt);
-			cerr << "unknow option: " << char(optopt) << endl;
+			cerr << "unknown option: " << static_cast<char>(optopt) << endl;
 			break;
 		default:
 			break;
@@ -74,8 +75,8 @@ int main(int argc, char* argv[])
 	extern int thread_i;
 	extern int genomeSize;
 	//string seqFileName = "/home/caiwenda/dmel.trimmedReads_20x.fasta";
-	string seqFileName = "";//argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
-	string asmFileName = "";//argv[3];//"result_chm13_debug713.fasta";
+	string seqFileName;//argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
+	string asmFileName;//argv[3];//"result_chm13_debug713.fasta";
 	//string asmFileName = "tmp.fasta";
 	string outFilePre = getCurrentDate();
 	//string seqFileName = "result_ecoli_debug.fasta";
@@ -93,14 +94,23 @@ int main(int argc, char* argv[])
 	StringSet<CharString> ID;
 	clock_t start = clock();
 
-	loadSeqData(seqFileName, ID, seq);
+	try
+	{
+		loadSeqData(seqFileName, ID, seq);
+	}
+	catch (exception & e)
+	{
+		cerr << e.what() << endl;
+		getchar();
+		return 1;
+	}
 	seqan::clear(ID);
 	malloc_trim(0);
 	auto kmerHashTable = createKmerHashTable(seq, true);
 	//filterKmer(*kmerHashTable, kfFileName);
-	int block1 = 0;
-	int block2 = 0;
-	int b_size = length(seq) / thread_i;
+	uint block1 = 0;
+	uint block2 = 0;
+	uint b_size = length(seq) / thread_i;
 	ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
 	ofstream seqOut(asmFileName, ios_base::out);
 	//ofstream seqOut;
@@ -110,14 +120,14 @@ int main(int argc, char* argv[])
 	for (size_t i = 0; i < thread_i; i++)
 	{
 		block2 += b_size;
-		threadPool.push_back(thread(mainProcess, 
-			ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, ovLen));
+		threadPool.emplace_back(mainProcess, 
+		                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, ovLen);
 		block1 = block2;
 	}
 	if (length(seq) % thread_i != 0)
 	{
-		threadPool.push_back(thread(mainProcess, 
-			ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, ovLen));
+		threadPool.emplace_back(mainProcess, 
+		                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, ovLen);
 	}
 	for (auto& th : threadPool)
 	{

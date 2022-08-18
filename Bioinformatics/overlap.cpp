@@ -1,8 +1,15 @@
-#include "proccess.h"
-#include "assembler.hpp"
+#include "overlap.h"
+#include "utility.h"
+#include <malloc.h>
+#include <mutex>
+#include <iostream>
+#include <algorithm>
+#include <random>
+#include <cstdlib>
+#include <fstream>
 #include <boost/graph/copy.hpp>
 #include "boost/graph/depth_first_search.hpp"
-#include <malloc.h>
+#include <boost/format.hpp>
 
 using namespace std;
 using namespace seqan;
@@ -15,17 +22,11 @@ mutex overlapMutex;
 uint KMER_STEP = 1;
 int KMER_LIMIT = 51;
 int thread_i = 9;
-int OVL_TIP_LEN = 200;// *80;
 int CHAIN_LEN = 2;
 double DETECT_RATIO = 0.2;
-int genomeSize = 100 * 1000000 * 1.0; //5000000;
 
-vector<shared_ptr<list<assemblyInfo_t>>> assemblyChain;
-shared_ptr<AGraph> assemblyGraph;
 vector<assemblyInfo_t> overlap;
 seqData_t assemblySeq;
-shared_ptr<SubGraph> tmpGraph;
-vector<ComponentGraph> comps;
 
 kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 {
@@ -210,7 +211,7 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	}
 	return 0;
 }
-std::set<size_t> delReads;
+
 vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	vector<assemblyInfo_t> res;
@@ -389,9 +390,10 @@ void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>
 	overlap.insert(overlap.end(), v_ovl.begin(), v_ovl.end());
 }
 
-void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen)
+void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen)
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
+	vector<assemblyInfo_t> ovls;
 	for (uint r = block1; r < block2; r++)
 	{
 		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
@@ -416,8 +418,9 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 1000, 2000, 0.2, r, i);
 					if (chain_v.size() > 0)
 					{
-						lock_guard<mutex> lock(fileMutex);
-						outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600, chainLen, ovLen);
+						auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
+						ovls.insert(ovls.begin(), v_ovl.begin(), v_ovl.end());
+						//outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600, chainLen, ovLen);
 					}
 				}
 			}
@@ -425,76 +428,16 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		//seqan::clear(seq[r]);
 	}
 	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
-}
-
-void cwd::assembler(const seqData_t& seq, ofstream & seqOut)
-{
-	//ofstream outAssembly("toyAssembly.csv");
-	//for (auto& chain : assemblyChain)
-	//{
-	//	if (chain->size() < 3)
-	//	{
-	//		continue;
-	//	}
-	//	for (auto& ovl : *chain)
-	//	{
-	//		outAssembly << boost::format("%u, %u, %u, %u, %u, %u\n") 
-	//			% ovl.r1 % ovl.r2 % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2;
-	//		
-	//	}
-	//	//cout << "--------------------------------------------------------------\n";
-	//	outAssembly << endl;
-	//}
-	//assemblyChain.clear();
-	//outAssembly.close();
-
-	ofstream outAssembly, outPath;
-	outPath.open("toyAssembly_path.txt");
-	outAssembly.open("toyAssembly_graph.txt");
-	int i = 0;
-	int totalLen = 0;
-	for (auto& aGraph : comps)
+	lock_guard<mutex> lock(fileMutex);
+	for (auto& ovl : ovls)
 	{
-	//	boost::dynamic_properties dp;
-	//	dp.property("node_id", boost::get(&AVertex::r, *aGraph));
-	//	dp.property("node_id", boost::get(&AVertex::r, *aGraph));
-	//	dp.property("label", boost::get(vertex_property_t(), *aGraph));
-	//	dp.property("label", boost::get(edge_property_t(), *aGraph));
-	//	boost::write_graphviz(outAssembly, *aGraph, dp);
-		AGraph g;
-		copy_graph(aGraph, g);
-		boost::write_graphviz(outAssembly, g, boost::make_label_writer(boost::get(vertex_property_t(), aGraph)),
-		make_edge_writer(boost::get(&AEdge::adj, g), boost::get(&AEdge::weight, g)));
-		outAssembly << endl;
-		outPath << "Graph: " << i++;
-		auto ps = findPath(g, seq, outPath);
-		sort(ps.begin(), ps.end(), 
-			[](vector<vertex_descriptor>& a, vector<vertex_descriptor>& b) 
+		if (ovl.EP1 - ovl.SP1 > ovLen && ovl.EP2 - ovl.SP2 > ovLen)
 		{
-			return a.size() > b.size();
-		});
-		float sum = 0;
-		for (auto& p : ps)
-		{
-			sum += p.size();
+			outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u, %u\n")
+				% ovl.r1 % ovl.r2 % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[ovl.r1]) % length(seq[ovl.r1]);
 		}
-		sum /= ps.size();
-		for (auto& p : ps)
-		{
-			if (totalLen < genomeSize)
-			{
-				generateContig(g, p, seq, seqOut, i++, totalLen);
-			}
-			copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outPath, " -> "));
-			outPath << *p.rbegin() << endl;
-		}
-		//break;
-		//set_union(un.begin(), un.end(), sp.begin(), sp.end(), inserter(un, un.begin()));
 	}
-	comps.clear();
-	overlap.clear();
-	outAssembly.close();
-	outPath.close();
+	overlap.insert(overlap.end(), ovls.begin(), ovls.end());
 }
 
 kmer_t cwd::revComp(const kmer_t& kmer)
@@ -531,408 +474,33 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 	return hamming(gap1, gap2) < 0.5f;
 }
 
-std::string cwd::getCurrentDate()
-{
-	time_t nowtime;
-	nowtime = time(NULL); //获取日历时间   
-	char tmp[64];
-	strftime(tmp, sizeof(tmp), "%Y-%m-%d-%H-%M", localtime(&nowtime));
-	return tmp;
-}
-
-float cwd::jaccard(string& a, string& b)
-{
-	if (a == "" && b == "")
-	{
-		return 1.0f;
-	}
-	// 都为空相似度为 1
-	if (a == "" || b == "")
-	{
-		return 0.0f;
-	}
-	std::set<int> aChar(a.begin(), a.end());
-	std::set<int> bChar(b.begin(), b.end());
-	std::set<int> in;
-	std::set<int> un;
-	set_intersection(aChar.begin(), aChar.end(), bChar.begin(), bChar.end(), inserter(in, in.begin()));
-	set_union(aChar.begin(), aChar.end(), bChar.begin(), bChar.end(), inserter(un, un.begin()));
-	int inter = in.size(); // 交集数量
-	int uni = un.size(); // 并集数量
-	if (inter == 0) return 0;
-	return ((float)inter) / (float)uni;
-}
-
-float cwd::hamming(string& a, string& b)
-{
-	if (a == "" || b == "")
-	{
-		return 0.0f;
-	}
-	if (a.length() != b.length())
-	{
-		return 0.0f;
-	}
-
-	int disCount = 0;
-	for (int i = 0; i < a.length(); i++)
-	{
-		if (a.at(i) != b.at(i))
-		{
-			disCount++;
-		}
-	}
-	return (float)disCount / (float)a.length();
-}
-
-void cwd::createOverlapGraph(seqData_t& seq, int block1, int block2)
-{
-	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
-	vertex_descriptor src, dst;
-	uint idx = 0;
-	assemblyGraph = make_shared<AGraph>();
-	tmpGraph = make_shared<SubGraph>();
-	auto e_prop = boost::get(&AEdge::weight, *assemblyGraph);
-	for (int i = block1; i < block2; i++)
-	{
-		auto& ovl = overlap[i];
-		if (true)
-		{
-			//int j = length(seq[i]);
-			bool flag = false;
-			uint r = ovl.r1;
-			uint i = ovl.r2;
-			uint len_r = length(seq[r]);
-			uint len_i = length(seq[i]);
-			bool isHeadTail = false, isTailHead = false, isHeadHead = false, isTailTail = false;
-			if (
-				(isTailHead = len_r - ovl.EP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && ovl.orient) ||
-				(isHeadTail = len_i - ovl.EP2 < OVL_TIP_LEN && ovl.SP1 < OVL_TIP_LEN && ovl.orient) ||
-				(isHeadHead = ovl.SP1 < OVL_TIP_LEN && ovl.SP2 < OVL_TIP_LEN && !ovl.orient) ||
-				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
-				) //TODO direction
-			{
-				delReads.insert(r);
-				delReads.insert(i);
-				if (0)
-				{
-					for (auto& chain : assemblyChain)
-					{
-						auto ix = find_if(chain->begin(), chain->end(),
-							[=](assemblyInfo_t& a) {
-							return a.r1 == r || a.r1 == i || a.r2 == r || a.r2 == i;
-						});
-						if (ix != chain->end())
-						{
-							//chain->push_back(ovl);
-							flag = true;
-							chain->insert(next(ix), ovl);
-							//break;
-						}
-						//if (chain->rbegin()->r1 == r || chain->rbegin()->r1 == i)
-						//{
-						//	chain->push_back({ r, i, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
-						//	flag = true;
-						//	break;
-						//}
-						//else if (chain->rbegin()->r2 == r || chain->rbegin()->r2 == i)
-						//{
-						//	chain->push_back({ i, r, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
-						//	flag = true;
-						//	break;
-						//}
-					}
-					if (!flag)
-					{
-						auto n_chain = make_shared<list<assemblyInfo_t>>();
-						n_chain->push_back(ovl);
-						assemblyChain.push_back(n_chain);
-					}
-				}
-				string ovl1 = { begin(seq[r]) + ovl.SP1,  begin(seq[r]) + ovl.EP1 };
-				string ovl2 = { begin(seq[i]) + ovl.SP2,  begin(seq[i]) + ovl.EP2 };
-				if (!ovl.orient)
-				{
-					ovl2 = cwd::revComp(ovl2);
-				}
-				auto precision = 1.0f - hamming(ovl1, ovl2);
-				if (precision < 0.99f)
-				{
-					continue;
-				}
-				//if (delReads.find(r) != delReads.end() || delReads.find(i) != delReads.end())
-				//{
-				//	continue;
-				//}
-				double weight = 1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * precision;
-				//double weight = 1.0 * (ovl.EP1 - ovl.SP1) * precision;
-
-				auto& aGraph = assemblyGraph;
-				boost::graph_traits<AGraph>::vertex_iterator vi, vi_end;
-				boost::tie(vi, vi_end) = boost::vertices(*aGraph);
-				auto prop = boost::get(vertex_property_t(), *aGraph);
-				auto vx = find_if(vi, vi_end,
-					[=](vertex_descriptor ix) {
-						AVertex y = prop[ix];
-						return y.r == r || y.r == i;
-				});
-				if (vx != vi_end)
-				{
-					flag = true;
-					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
-					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
-					if (prop[*vx].r == r) // if vx == r1
-					{
-						auto vx2 = find_if(vi, vi_end,
-							[=](vertex_descriptor ix) {
-							AVertex y = prop[ix];
-							return y.r == i;
-						});
-						if (vx2 != vi_end)
-						{
-							auto e = boost::edge(*vx, *vx2, *aGraph);
-							if (e.second)
-							{
-								auto edg = e.first;
-								if (e_prop[edg] < weight)
-								{
-									e_prop[edg] = weight;
-								}
-							}
-
-							else
-							{
-								if (isTailHead)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-								}
-								else if (isHeadTail)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								}
-								else if (isHeadHead)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								}
-								else if (isTailTail)
-								{
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								}
-								else
-								{
-									cerr << "none\n";
-								}
-
-							}
-							//add to an overlap vector
-						}
-						else
-						{
-							src = boost::add_vertex(v2, *aGraph);
-							// src == r2
-							if (isHeadTail)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-								// *vx -> src
-								boost::add_edge(src, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								// src -> *vx
-							}
-							else if (isHeadHead)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								boost::add_edge(src, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-							}
-							else if (isTailHead)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								boost::add_edge(src, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-							}
-							else if (isTailTail)
-							{
-								boost::add_edge(*vx, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								boost::add_edge(src, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-							}
-							else
-							{
-								cerr << "none\n";
-							}
-							//TODO: condition of direction
-						}
-					}
-					else // vx == r2
-					{
-						auto vx2 = find_if(vi, vi_end,
-							[=](vertex_descriptor ix) {
-							AVertex y = prop[ix];
-							return y.r == r;
-						});
-						if (vx2 != vi_end)
-						{
-							auto e = boost::edge(*vx, *vx2, *aGraph);
-							if (e.first.m_eproperty)
-							{
-								auto edg = e.first;
-								if (e_prop[edg] < weight)
-								{
-									e_prop[edg] = weight;
-								}
-							}
-
-							else
-							{
-								if (isTailHead)
-								{
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-								}
-								else if (isHeadTail)
-								{
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								}
-								else if (isHeadHead)
-								{
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								}
-								else if (isTailTail)
-								{
-									boost::add_edge(*vx2, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-									boost::add_edge(*vx, *vx2, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								}
-								else
-								{
-									cerr << "none\n";
-								}
-							}
-							//add to an overlap vector
-						}
-						else
-						{
-							dst = boost::add_vertex(v, *aGraph);
-							// dst == r1
-							if (isTailHead)
-							{
-								boost::add_edge(dst, *vx, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-								// dst -> *vx
-								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-								// *vx -> dst
-							}
-							else if (isHeadTail)
-							{
-								boost::add_edge(dst, *vx, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-								boost::add_edge(*vx, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-							}
-							else if (isHeadHead)
-							{
-								boost::add_edge(dst, *vx, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-								boost::add_edge(*vx, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-							}
-							else if (isTailTail)
-							{
-								boost::add_edge(dst, *vx, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-								boost::add_edge(*vx, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-							}
-							else
-							{
-								cerr << "none\n";
-							}
-							//TODO: condition of direction
-						}
-					}
-				}
-
-				if (!flag)
-				{
-					auto& aGraph = assemblyGraph;
-					AVertex v = { ovl.r1, ovl.SP1, ovl.EP1 };
-					AVertex v2 = { ovl.r2, ovl.SP2, ovl.EP2 };
-					src = boost::add_vertex(v, *aGraph);
-					dst = boost::add_vertex(v2, *aGraph);
-					if (isTailHead)
-					{
-						boost::add_edge(src, dst, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-						boost::add_edge(dst, src, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-					}
-					else if (isHeadTail)
-					{
-						boost::add_edge(src, dst, AEdge{ AEdge::HeadTail, ovl, weight }, *aGraph);
-						boost::add_edge(dst, src, AEdge{ AEdge::TailHead, ovl, weight }, *aGraph);
-					}
-					else if (isHeadHead)
-					{
-						boost::add_edge(src, dst, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-						boost::add_edge(dst, src, AEdge{ AEdge::HeadHead, ovl, weight }, *aGraph);
-					}
-					else if (isTailTail)
-					{
-						boost::add_edge(src, dst, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-						boost::add_edge(dst, src, AEdge{ AEdge::TailTail, ovl, weight }, *aGraph);
-					}
-					else
-					{
-						cerr << "none\n";
-					}
-				}
-			}
-		}
-	}
-	connected_components_subgraphs(*assemblyGraph);
-}
-
-void cwd::connected_components_subgraphs(AGraph const& g)
-{
-	using namespace boost;
-	boost::copy_graph(g, *tmpGraph);
-	std::shared_ptr<vector<unsigned long>> mapping = std::make_shared<vector<unsigned long>>(num_vertices(g));
-	size_t num = connected_components(*tmpGraph, mapping->data());
-
-	auto& component_graphs = comps;
-
-	for (size_t i = 0; i < num; i++)
-		component_graphs.emplace_back(g,
-			[mapping, i, &g](AGraph::edge_descriptor e) {
-		return mapping->at(source(e, g)) == i
-			|| mapping->at(target(e, g)) == i;
-	},
-			[mapping, i](AGraph::vertex_descriptor v) {
-		return mapping->at(v) == i;
-	});
-
-	//return component_graphs;
-}
-
-bool cwd::isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b)
-{
-	//vector<bool> visited(boost::num_vertices(g));
-	SubGraph gs;
-	boost::copy_graph(g, gs);
-	std::vector<boost::default_color_type> color_map(boost::num_vertices(gs));
-	auto color = boost::make_iterator_property_map(color_map.begin(), boost::get(boost::vertex_index_t(), gs));
-	boost::depth_first_search(gs, boost::default_dfs_visitor(), color, a);
-	//auto xx = color[b];
-
-	//DFS(g, a, visited);
-	return color[b] != boost::default_color_type::white_color;
-}
-
-void cwd::DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited)
-{
-	AGraph::out_edge_iterator ei, eend;
-	auto ep = boost::out_edges(i, g);
-	ei = ep.first;
-	eend = ep.second;
-	for (auto e = ei; e != eend; e++)
-	{
-		auto v = boost::target(*e, g);
-		visited[v] = true;
-		DFS(g, v, visited);
-	}
-}
+//bool cwd::isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b)
+//{
+//	//vector<bool> visited(boost::num_vertices(g));
+//	SubGraph gs;
+//	boost::copy_graph(g, gs);
+//	std::vector<boost::default_color_type> color_map(boost::num_vertices(gs));
+//	auto color = boost::make_iterator_property_map(color_map.begin(), boost::get(boost::vertex_index_t(), gs));
+//	boost::depth_first_search(gs, boost::default_dfs_visitor(), color, a);
+//	//auto xx = color[b];
+//
+//	//DFS(g, a, visited);
+//	return color[b] != boost::default_color_type::white_color;
+//}
+//
+//void cwd::DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited)
+//{
+//	AGraph::out_edge_iterator ei, eend;
+//	auto ep = boost::out_edges(i, g);
+//	ei = ep.first;
+//	eend = ep.second;
+//	for (auto e = ei; e != eend; e++)
+//	{
+//		auto v = boost::target(*e, g);
+//		visited[v] = true;
+//		DFS(g, v, visited);
+//	}
+//}
 
 std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
