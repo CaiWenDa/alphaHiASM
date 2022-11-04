@@ -2,7 +2,7 @@
 A developing long reads assmebly
 
 # Before installing
-    This project is depended "seqan" and "boost" libraries. You should download them firstly.
+    This project is depended on "seqan" and "boost" libraries. You should download them firstly.
     seqan: http://packages.seqan.de/seqan-library/seqan-library-2.4.0.zip
     boost: https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz
 
@@ -15,12 +15,12 @@ A developing long reads assmebly
     make all
 
 # Usage
-		alphaHiASM
-		--file - file
-		--output - dir PATH
-		--genomeSize SIZE
-		--threads int
-		[--minOverlap SIZE]
-		[--help]
-		[--paf inOverlapFile]
-		[--overlap outOverlapFile]
+	alphaHiASM
+	--file - file
+	--output - dir PATH
+	--genomeSize SIZE
+	--threads int
+	[--minOverlap SIZE]
+	[--help]
+	[--paf inOverlapFile]
+	[--overlap outOverlapFile]
