@@ -9,6 +9,8 @@
 #include <random>
 #include <cstdlib>
 
+#define DEBUG_ONE_BY_ONE 0
+
 using namespace cwd;
 using namespace std;
 
@@ -18,11 +20,29 @@ extern vector<cwd::assemblyInfo_t> overlap;
 vector<cwd::ComponentGraph> comps;
 shared_ptr<cwd::AGraph> assemblyGraph;
 shared_ptr<cwd::SubGraph> tmpGraph;
-int OVL_TIP_LEN = 200;// *80;
-int genomeSize = 100 * 1000000 * 1.0; //5000000;
+int OVL_TIP_LEN = 200;// * 80;
+int genomeSize = 0;//100 * 1000000 * 1.0; //5000000;
 std::set<size_t> delReads;
 vector<shared_ptr<list<cwd::assemblyInfo_t>>> assemblyChain;
 
+
+uint cwd::heuristic(edge_descriptor & p, const cwd::AGraph& g, boost::adj_list_edge_property_map<boost::bidirectional_tag, cwd::AEdge::Adj, const cwd::AEdge::Adj&, cwd::vertex_descriptor, const cwd::AEdge, cwd::AEdge::Adj cwd::AEdge::*>& adj_prop, boost::adj_list_edge_property_map<boost::bidirectional_tag, cwd::assemblyInfo_t, const cwd::assemblyInfo_t&, cwd::vertex_descriptor, const cwd::AEdge, cwd::assemblyInfo_t cwd::AEdge::*>& ovl_prop)
+{
+	auto nextv = boost::source(p, g);
+	auto out_deg = boost::out_degree(nextv, g);
+	auto adj = adj_prop[p];
+	auto tip_len = ovl_prop[p].SP1;
+	if (adj == AEdge::HeadHead or adj == AEdge::HeadTail)
+	{
+		tip_len = ovl_prop[p].SP1;
+	}
+	else
+	{
+		tip_len = ovl_prop[p].SP2;
+	}
+	uint weight = out_deg * 10 - tip_len;
+	return weight * 10;
+}
 
 vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_t& seq, ofstream & outAssembly)
 {
@@ -121,7 +141,6 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 		//seqOut << endl;
 	}
 	//return p_v;
-
 	for (auto& vs : vex)
 	{
 		if (path.find(vs) != path.end())
@@ -140,7 +159,10 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 		auto prev_v = vs;
 		auto idx = 0;
 		bool flag_dup = false;
+		size_t path_id = 0;
+		auto pp = p_v.end();
 		auto cnt = 0;
+		auto pre_ins = true;
 		while (boost::out_degree(vx, g))
 		{
 			tie(e, eend) = boost::out_edges(vx, g);
@@ -197,12 +219,14 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 			else
 			{
 				auto break_flag = false;
+				auto vv = 0lu;
 				for (auto& e : v_edge)
 				{
 					auto v = boost::target(e, g);
 					if (path.find(v) != path.end())
 					{
 						cnt++;
+						vv = v;
 						if (find(pt.begin(), pt.end(), v) != pt.end())
 						{
 							// record v;
@@ -221,14 +245,39 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 				if (break_flag)
 				{
 					path.insert(vs);
+					for (auto ip = p_v.begin(); ip != p_v.end(); ++ip)
+					{
+						if (find(ip->begin(), ip->end(), vv) != ip->end())
+						{
+							pp = ip;
+							break;
+						}
+					}
 					break;
 				}
 			}
+			//TODO: A-Star:
 			sort(v_edge.begin(), v_edge.end(),
 				[&e_prop](edge_descriptor a, edge_descriptor b)
 			{
 				return e_prop[a] > e_prop[b];
 			});
+#if DEBUG_ONE_BY_ONE
+			ofstream seqOut2("other_reads.fasta");
+			for (auto& e : v_edge)
+			{
+				auto v = boost::target(e, g);
+				auto assembly2 = seq[v_prop[v].r];
+				seqOut2 << boost::format(">contig_%d; length=?; reads=?; type=dna\n") % ii++;
+				auto a = begin(assembly2);
+				for (; a < prev(end(assembly2), 1000); std::advance(a, 1000))
+				{
+					seqOut2 << string{ a, next(a, 1000) } << endl;
+				}
+				seqOut2 << string{ a, end(assembly2) } << endl;
+				seqOut2 << endl;
+			}
+#endif
 			auto p = v_edge.begin();
 			auto orient = ovl_prop[*p].orient;
 			auto nextv = boost::target(*p, g);
@@ -240,18 +289,18 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 			}
 			if (p != v_edge.end())
 			{
-				auto ovl = ovl_prop[*p];
-				auto sp1 = v_prop[vx].r == ovl.r1 ? ovl.SP1 : ovl.SP2;
-				auto ep1 = v_prop[vx].r == ovl.r1 ? ovl.EP1 : ovl.EP2;
-				string ovl1 = { begin(seq[v_prop[vx].r]) + sp1,  begin(seq[v_prop[vx].r]) + ep1 };
+				//auto ovl = ovl_prop[*p];
+				//auto sp1 = v_prop[vx].r == ovl.r1 ? ovl.SP1 : ovl.SP2;
+				//auto ep1 = v_prop[vx].r == ovl.r1 ? ovl.EP1 : ovl.EP2;
+				//string ovl1 = { begin(seq[v_prop[vx].r]) + sp1,  begin(seq[v_prop[vx].r]) + ep1 };
 				prev_v = vx;
 				vx = nextv;
 				pt.push_back(nextv);
 				preOrient = orient;
 				adj = adj_prop[*p];
-				auto sp2 = v_prop[nextv].r == ovl.r2 ? ovl.SP2 : ovl.SP1;
-				auto ep2 = v_prop[nextv].r == ovl.r2 ? ovl.EP2 : ovl.EP1;
-				string ovl2 = { begin(seq[v_prop[nextv].r]) + sp2,  begin(seq[v_prop[nextv].r]) + ep2 };
+				//auto sp2 = v_prop[nextv].r == ovl.r2 ? ovl.SP2 : ovl.SP1;
+				//auto ep2 = v_prop[nextv].r == ovl.r2 ? ovl.EP2 : ovl.EP1;
+				//string ovl2 = { begin(seq[v_prop[nextv].r]) + sp2,  begin(seq[v_prop[nextv].r]) + ep2 };
 				//cout << " -> " << v_prop[nextv].r << " (" << orient
 				//	<< boost::format("; adj: %u, SP1: %u; EP1: %u; SP2: %u; EP2: %u; %f")
 				//	% adj % sp1 % ep1 % sp2 % ep2 % hamming(ovl1, ovl2)
@@ -328,12 +377,14 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 				else
 				{
 					auto break_flag = false;
+					auto vv = 0lu;
 					for (auto& e : v_edge)
 					{
 						auto v = boost::source(e, g);
 						if (path.find(v) != path.end())
 						{
 							cnt++;
+							vv = v;
 							if (find(pt.begin(), pt.end(), v) != pt.end())
 							{
 								// record v;
@@ -358,16 +409,47 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 					if (break_flag)
 					{
 						path.insert(vs);
+						for (auto ip = p_v.begin(); ip != p_v.end(); ++ip)
+						{
+							if (find(ip->begin(), ip->end(), vv) != ip->end())
+							{
+								pp = ip;
+								break;
+							}
+						}
+						pre_ins = false;
 						break;
 					}
 				}
 
-				sort(v_edge.begin(), v_edge.end(),
-					[&e_prop](edge_descriptor a, edge_descriptor b)
+				//sort(v_edge.begin(), v_edge.end(),
+				//	[&e_prop](edge_descriptor a, edge_descriptor b)
+				//{
+				//	return e_prop[a] > e_prop[b];
+				//});
+				auto p = max_element(v_edge.begin(), v_edge.end(),
+					[&e_prop, &g, &adj_prop, &ovl_prop](edge_descriptor a, edge_descriptor b)
 				{
-					return e_prop[a] > e_prop[b];
+					return e_prop[a] + heuristic(a, g, adj_prop, ovl_prop) < e_prop[b] + heuristic(b, g, adj_prop, ovl_prop);
 				});
-				auto p = v_edge.begin();
+#if DEBUG_ONE_BY_ONE
+				ofstream seqOut2("other_reads.fasta", ios_base::app);
+				for (auto& e : v_edge)
+				{
+					auto v = boost::target(e, g);
+					auto assembly2 = seq[v_prop[v].r];
+					seqOut2 << boost::format(">contig_%d; length=?; reads=?; type=dna\n") % ii++;
+					auto a = begin(assembly2);
+					for (; a < prev(end(assembly2), 1000); std::advance(a, 1000))
+					{
+						seqOut2 << string{ a, next(a, 1000) } << endl;
+					}
+					seqOut2 << string{ a, end(assembly2) } << endl;
+					seqOut2 << endl;
+				}
+#endif
+
+				//auto p = v_edge.begin();
 				auto orient = ovl_prop[*p].orient;
 				auto nextv = boost::source(*p, g);
 				//cout << vs << " ";
@@ -391,6 +473,7 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 					break;
 				}
 			}
+			++path_id;
 			std::reverse(pt_pre.begin(), pt_pre.end());
 			pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
 			auto i_rev_vs = find(pt.begin(), pt.end(), rev_vs);
@@ -435,13 +518,29 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 		//}
 		//std::reverse(pt_pre.begin(), pt_pre.end());
 		//pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
-		if (pt.size() > 0)
+		if (pt.size() > 1)
 		{
 			//std::reverse(pt.begin(), pt.end());
 			//copy(pt.begin(), prev(pt.end()), ostream_iterator<int, char>(outAssembly, " -> "));
 			//outAssembly << *pt.rbegin() << endl;
 			//cout << pt.size() << endl;
-			p_v.push_back(pt);
+			if (pp != p_v.end() && pp->size() > 2)
+			{
+				if (pre_ins)
+				{
+					//p_v.insert(pp, pt);
+					//pp->insert(pp->end(), -1);
+					pp->insert(pp->end(), pt.begin(), pt.end());
+				}
+				else
+				{
+					//p_v.insert(std::next(pp), pt);
+					//pp->insert(pp->begin(), -1);
+					pp->insert(pp->begin(), pt.begin(), pt.end());
+				}
+			}
+			else
+				p_v.push_back(pt);
 		}
 
 	}
@@ -705,18 +804,103 @@ void cwd::generateContig(const cwd::AGraph & g, std::vector<vertex_descriptor>& 
 		auto E_adj = get(&AEdge::adj, g);
 		auto orient = E_ovl[edge(p[0], p[1], g).first].orient;
 		bool shouldRev = !orient;
+		auto a1 = E_adj[edge(p[0], p[1], g).first];
 
 		for (auto i = p.begin(); /*false && */i != prev(p.end()); i++)
 		{
-			auto e = edge(*i, *std::next(i), g).first;
-			auto e2 = edge(*std::next(i), *i, g).first;
+			auto es = edge(*i, *std::next(i), g);
+			auto es2 = edge(*std::next(i), *i, g);
+			auto e = es.first;
+			auto e2 = es2.first;
 			auto src = source(e, g);
 			auto des = target(e, g);
 			auto b = src == *i && des == *std::next(i);
 			auto sr = v_prop[src].r;
 			auto dr = v_prop[des].r;
-			E_ovl[e].r1;
-			E_ovl[e].r2;
+			if (es.second && es2.second)
+			{
+#if 1
+				auto a2 = E_adj[e2];
+				if (a1 == AEdge::HeadTail || a1 == AEdge::TailTail)
+				{
+					toPrev = true;
+				}
+				else
+				{
+					toPrev = false;
+				}
+				orient = E_ovl[e].orient;
+				if (!orient)
+				{
+					shouldRev = !shouldRev;
+					if (i == p.begin())
+					{
+						assembly = revComp(string{ begin(assembly), end(assembly) });
+					}
+				}
+				if (e.m_eproperty)
+				{
+					//outAssembly << "PRE:\n" << assembly << " " << endl;
+					//outAssembly << "NEWREAD:\n" << seq[v_prop[*i].r] << endl;
+					//outAssembly << "OVL:\n" << E_ovl[e].SP1 << " " 
+					//	<< E_ovl[e].SP2 << " " << E_ovl[e].EP1 << " " 
+					//	<< E_ovl[e].EP2 << endl;
+					//outAssembly << "ADJ:\n" << E_adj[e] << endl;
+					//cout << "ADJ: " << bitset<2>(E_adj[e]) << " orient: " << E_ovl[e].orient << endl;
+					//if (1/*v_prop[*i].r == E_ovl[e].r1*/)
+					//{
+					//	cout << v_prop[*i].r << "--- SP1: " << E_ovl[e].SP1 << " EP1 : " << E_ovl[e].EP1 << endl
+					//		<< v_prop[*std::next(i)].r << "--- SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2
+					//		<< " LEN1: " << length(seq[v_prop[*i].r]) 
+					//		<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
+					//	
+					//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
+					//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
+					//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
+					//	
+					//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
+					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+					//			  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					//}
+					//else
+					//{
+					//	cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
+					//		<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
+					//		<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
+					//		<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
+					//	
+					//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
+					//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
+					//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
+
+					//	compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
+					//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
+					//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
+					//}
+
+					assembly = concatReads(assembly, v_prop[des].r,
+						seq[v_prop[des].r], E_ovl[e], E_adj[e], shouldRev, toPrev);
+
+					//cout << "RES:\n";
+					//cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
+					//outAssembly << "RES:\n" << assembly << endl;
+				}
+				else
+				{
+					continue;
+				}
+
+#endif // 0
+			}
+			else
+			{
+				//advance(i, 2);
+				assembly = concatReadsDirect(assembly, seq[v_prop[*next(i)].r]);
+				a1 = E_adj[edge(*next(i), *next(i, 2), g).first];
+				shouldRev = !E_ovl[edge(*next(i), *next(i, 2), g).first].orient;
+			}
+			//E_ovl[e].r1;
+			//E_ovl[e].r2;
 			//auto assembly2 = seq[v_prop[*std::next(i)].r];
 			//seqOut2 << boost::format(">contig_%d; length=%d; reads=%d; type=dna\n") % id % length(assembly2) % p.size();
 			//auto a = begin(assembly2);
@@ -727,79 +911,6 @@ void cwd::generateContig(const cwd::AGraph & g, std::vector<vertex_descriptor>& 
 			//seqOut2 << string{ a, end(assembly2) } << endl;
 			//seqOut2 << endl;
 			//totalLen += length(assembly2);
-#if 1
-			auto a1 = E_adj[edge(p[0], p[1], g).first];
-			auto a2 = E_adj[e2];
-			if (a1 == AEdge::HeadTail || a1 == AEdge::TailTail)
-			{
-				toPrev = true;
-			}
-			else
-			{
-				toPrev = false;
-			}
-			orient = E_ovl[e].orient;
-			if (!orient)
-			{
-				shouldRev = !shouldRev;
-				if (i == p.begin())
-				{
-					assembly = revComp(string{ begin(assembly), end(assembly) });
-				}
-			}
-			if (e.m_eproperty)
-			{
-				//outAssembly << "PRE:\n" << assembly << " " << endl;
-				//outAssembly << "NEWREAD:\n" << seq[v_prop[*i].r] << endl;
-				//outAssembly << "OVL:\n" << E_ovl[e].SP1 << " " 
-				//	<< E_ovl[e].SP2 << " " << E_ovl[e].EP1 << " " 
-				//	<< E_ovl[e].EP2 << endl;
-				//outAssembly << "ADJ:\n" << E_adj[e] << endl;
-				//cout << "ADJ: " << bitset<2>(E_adj[e]) << " orient: " << E_ovl[e].orient << endl;
-				//if (1/*v_prop[*i].r == E_ovl[e].r1*/)
-				//{
-				//	cout << v_prop[*i].r << "--- SP1: " << E_ovl[e].SP1 << " EP1 : " << E_ovl[e].EP1 << endl
-				//		<< v_prop[*std::next(i)].r << "--- SP2: " << E_ovl[e].SP2 << " EP2: " << E_ovl[e].EP2
-				//		<< " LEN1: " << length(seq[v_prop[*i].r]) 
-				//		<< " LEN2: " << length(seq[v_prop[*std::next(i)].r]) << endl;
-				//	
-				//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
-				//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
-				//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
-				//	
-				//	compSeqInRange(seq[v_prop[*i].r], seq[v_prop[*std::next(i)].r], v_prop[*i].r,
-				//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-				//			  E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-				//}
-				//else
-				//{
-				//	cout << "NEWREAD: SP1: " << E_ovl[e].SP2 << " EP1: " << E_ovl[e].EP2
-				//		<< " SP2: " << E_ovl[e].SP1 << " EP2: " << E_ovl[e].EP1
-				//		<< " LEN1: " << length(seq[v_prop[*std::next(i)].r])
-				//		<< " LEN2: " << length(seq[v_prop[*i].r]) << endl;
-				//	
-				//	cout << boost::format("%u(%u) -> %u(%u) [r1:%u r2:%u]: orient: %d; adj: %d\n")
-				//		% *i % v_prop[*i].r % *(i + 1) % v_prop[*(i + 1)].r % E_ovl[e].r1
-				//		% E_ovl[e].r2 % E_ovl[e].orient % E_adj[e];
-
-				//	compSeqInRange(seq[v_prop[*std::next(i)].r], seq[v_prop[*i].r], v_prop[*std::next(i)].r,
-				//		E_ovl[e].SP1, E_ovl[e].SP2, E_ovl[e].EP1, E_ovl[e].EP2, std::min(E_ovl[e].EP1 - E_ovl[e].SP1,
-				//			E_ovl[e].EP2 - E_ovl[e].SP2), E_ovl[e].orient);
-				//}
-				
-				assembly = concatReads(assembly, v_prop[des].r,
-					seq[v_prop[des].r], E_ovl[e], E_adj[e], shouldRev, toPrev);
-
-				//cout << "RES:\n";
-				//cout << string{ begin(assembly), begin(assembly) + 60 } + "..." + string{ end(assembly) - 60, end(assembly) } << endl;
-				//outAssembly << "RES:\n" << assembly << endl;
-			}
-			else
-			{
-				continue;
-			}
-
-#endif // 0
 		}
 		if (true)
 		{
@@ -893,6 +1004,13 @@ seqan::Dna5String cwd::concatReads(const seqan::Dna5String& pre, uint r2, const 
 	return newRead;
 }
 
+seqan::Dna5String cwd::concatReadsDirect(const seqan::Dna5String& pre, const seqan::Dna5String& R2)
+{
+	string pr = { begin(pre), end(pre) };
+	string r2 = { begin(R2), end(R2) };
+	return pr + r2;
+}
+
 void cwd::connected_components_subgraphs(AGraph const& g)
 {
 	using namespace boost;
@@ -942,8 +1060,8 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
 				) //TODO direction
 			{
-				delReads.insert(r);
-				delReads.insert(i);
+				//delReads.insert(r);
+				//delReads.insert(i);
 				if (0)
 				{
 					for (auto& chain : assemblyChain)
@@ -1024,9 +1142,23 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 							if (e.second)
 							{
 								auto edg = e.first;
-								if (e_prop[edg] < weight)
+								e_prop[edg] += weight;
+								//TODO
+								auto d = target(edg, *aGraph);
+								auto s = source(edg, *aGraph);
+								auto p = boost::out_edges(s, *aGraph);
+								for (auto i = p.first; i != p.second; i++)
 								{
-									e_prop[edg] = weight;
+									auto x = target(*i, *aGraph);
+									if (x == d)
+									{
+										e_prop[edg] += weight;
+										break;
+									}
+								}
+								if (0/*目的节点在源点的其他边上*/)
+								{
+									/*e_prop[edg] = weight;*/
 								}
 							}
 
@@ -1106,10 +1238,11 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 							if (e.first.m_eproperty)
 							{
 								auto edg = e.first;
-								if (e_prop[edg] < weight)
-								{
-									e_prop[edg] = weight;
-								}
+								e_prop[edg] += weight;
+								//if (e_prop[edg] < weight)
+								//{
+									//e_prop[edg] = weight;
+								//}
 							}
 
 							else
@@ -1284,148 +1417,27 @@ void cwd::assembler(const seqData_t& seq, ofstream& seqOut)
 	outPath.close();
 }
 
-//for (auto& pp : p_v)
-//{
-//	auto t = find(pp.begin(), pp.end(), v);
-//	if (t != pp.end())
-//	{
-//		auto connected = false;
-//		auto Len1 = std::distance(t, pp.end());
-//		auto Len2 = std::distance(pp.begin(), t);
-//		if (Len1 >= pp.size() * 0.2 && Len1 >= pp.size() * 0.2)
-//		{
-//			break;
-//		}
-//		if (Len1 > Len2)
-//		{
-//			// head
-//			if (t == pp.end())
-//			{
-//				break;
-//			}
-//			auto f_e = boost::edge(*t, *std::next(t), g);
-//			if (!f_e.second)
-//			{
-//				break;
-//			}
-//			adj = adj_prop[f_e.first];
-//			preOrient = ovl_prop[f_e.first].orient;
-//			if (preOrient)
-//			{
-//				if (adj == AEdge::HeadTail)
-//				{
-//					if (adj_prop[e] == AEdge::TailTail or adj_prop[e] == AEdge::HeadTail)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else if (adj == AEdge::TailHead)
-//				{
-//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else
-//				{
-//					;
-//				}
-//			}
-//			else
-//			{
-//				if (adj == AEdge::HeadHead)
-//				{
-//					if (adj_prop[e] == AEdge::HeadTail or adj_prop[e] == AEdge::TailTail)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else if (adj == AEdge::TailTail)
-//				{
-//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else
-//				{
-//					;
-//				}
-//			}
-//			if (Len2 > pt.size())
-//			{
-//				break;
-//			}
-//			auto pos = pp.erase(pp.begin(), t);
-//			std::reverse(pt.begin(), pt.end());
-//			pp.insert(pos, pt.begin(), pt.end());
-//			break;
-//		}
-//		else
-//		{
-//			//tail
-//			if (t == pp.begin())
-//			{
-//				break;
-//			}
-//			auto f_e = boost::edge(*std::prev(t), *t, g);
-//			if (!f_e.second)
-//			{
-//				break;
-//			}
-//			adj = adj_prop[f_e.first];
-//			preOrient = ovl_prop[f_e.first].orient;
-//			if (preOrient)
-//			{
-//				if (adj == AEdge::HeadTail)
-//				{
-//					if (adj_prop[e] == AEdge::TailTail or adj_prop[e] == AEdge::HeadTail)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else if (adj == AEdge::TailHead)
-//				{
-//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else
-//				{
-//					;
-//				}
-//			}
-//			else
-//			{
-//				if (adj == AEdge::HeadHead)
-//				{
-//					if (adj_prop[e] == AEdge::HeadTail or adj_prop[e] == AEdge::TailTail)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else if (adj == AEdge::TailTail)
-//				{
-//					if (adj_prop[e] == AEdge::TailHead or adj_prop[e] == AEdge::HeadHead)
-//					{
-//						connected = true;
-//					}
-//				}
-//				else
-//				{
-//					;
-//				}
-//			}
-//
-//			if (Len2 > pt.size())
-//			{
-//				break;
-//			}
-//			auto pos = pp.erase(std::next(t), pp.end());
-//			pp.insert(pos, pt.begin(), pt.end());
-//			break;
-//		}
-//	}
-//}
-//break;
+void cwd::readOverlapGraph(const string& graphName, vector<AGraph>& v_g)
+{
+	//using namespace boost;
+
+	//// Construct an empty graph and prepare the dynamic_property_maps.
+	//AGraph graph(0);
+	//dynamic_properties dp(ignore_other_properties);
+
+	//dp.property("label", get(&AVertex::r, graph));
+	//dp.property("adj", get(&AEdge::adj, graph));
+	//dp.property("weight", get(&AEdge::weight, graph));
+
+	//// Sample graph as an std::istream;
+	//ifstream dot(graphName);
+	//FILE* fp = fopen(graphName.c_str(), "rb");
+	//fread(&comps, 1, 1, fp);
+	//std::istringstream
+	//	gvgraph("digraph { graph [name=\"graphname\"]  a  c e [mass = 6.66] }");
+
+	//while (read_graphviz(dot, graph, dp, "node_id"))
+	//{
+	//	v_g.push_back(graph);
+	//}
+}

@@ -54,7 +54,7 @@ namespace cwd
 
 		template <class Edge>
 		void operator()(ostream& out, const Edge& e) const {
-			out << "[label=\"" << bitset<2>(wm[e]) << ", " << wn[e] << "\"]";
+			out << "[adj=" << bitset<2>(wm[e]) << ", weight=" << wn[e] << "]";
 		}
 	private:
 		WeightMap wm;
@@ -69,7 +69,7 @@ namespace cwd
 
 	using AGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::bidirectionalS, boost::property<vertex_property_t, AVertex>, AEdge>;
 	using SubGraph = boost::adjacency_list<boost::mapS, boost::vecS, boost::undirectedS, boost::property<vertex_property_t, AVertex>, AEdge>;
-	typedef boost::filtered_graph<AGraph, function<bool(AGraph::edge_descriptor)>, function<bool(AGraph::vertex_descriptor)> > ComponentGraph;
+	using ComponentGraph = boost::filtered_graph<AGraph, function<bool(AGraph::edge_descriptor)>, function<bool(AGraph::vertex_descriptor)> >;
 
 	using vertex_iterator = boost::graph_traits<AGraph>::vertex_iterator;
 	using edge_iterator = boost::graph_traits<AGraph>::edge_iterator;
@@ -80,9 +80,12 @@ namespace cwd
 
 
 	void generateContig(const cwd::AGraph& g, std::vector<vertex_descriptor>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id, int& totalLen);
+	uint heuristic(edge_descriptor & p, const cwd::AGraph& g, boost::adj_list_edge_property_map<boost::bidirectional_tag, cwd::AEdge::Adj, const cwd::AEdge::Adj&, cwd::vertex_descriptor, const cwd::AEdge, cwd::AEdge::Adj cwd::AEdge::*>& adj_prop, boost::adj_list_edge_property_map<boost::bidirectional_tag, cwd::assemblyInfo_t, const cwd::assemblyInfo_t&, cwd::vertex_descriptor, const cwd::AEdge, cwd::assemblyInfo_t cwd::AEdge::*>& ovl_prop);
 	vector<vector<vertex_descriptor>> findPath(const AGraph& g, const seqData_t& seq, ofstream& outAssembly);
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t& ovl, cwd::AEdge::Adj adj, bool shouldRev, bool toPrev);
+	seqan::Dna5String concatReadsDirect(const seqan::Dna5String& pre, const seqan::Dna5String& R2);
 	void createOverlapGraph(seqData_t& seq, size_t block1, size_t block2);
 	void assembler(const seqData_t& seq, ofstream& seqOut);
+	void readOverlapGraph(const string& graphName, vector<AGraph>& v_g);
 	void connected_components_subgraphs(AGraph const& g);
 }

@@ -114,7 +114,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector
 				{
 					int s = min(ix->SP1, nextx->SP1), s2 = min(ix->SP2, nextx->SP2);
 					int min_d = min(d1, d2);
-					if (findSmallerSameKmer(seq, r, t, ks, s, s2, min_d,ix->orient && nextx->orient))
+					if (findSmallerSameKmer(seq, r, t, ks, s, s2, min_d, ix->orient && nextx->orient))
 					{
 						chain->push_back(*nextx);
 						ix = nextx;
@@ -335,7 +335,7 @@ void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqD
 	cerr << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
 	cerr << "seqFile has been read.\n";
-	//ofstream dict("dict3.txt", ios_base::out);
+	//ofstream dict("dict_ecoli_trim.txt", ios_base::out);
 	//int i = 0;
 	//for (auto& str : id)
 	//{
@@ -372,15 +372,6 @@ void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>
 {
 	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
 
-	//for (auto& ovl : v_ovl)
-	//{
-	//	if (ovl.EP1 - ovl.SP1 > ovLen && ovl.EP2 - ovl.SP2 > ovLen)
-	//	{
-	//		outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u, %u\n")
-	//			% r % i % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[r]) % length(seq[i]);
-	//	}
-	//}
-	
 	//vector<assemblyInfo_t> v_ass;
 	//transform(v_ovl.begin(), v_ovl.end(), back_inserter(v_ass),
 	//		[=](overlapInfo_t& a) {
@@ -413,10 +404,10 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
 				kmerSet->erase(i);
 				//malloc_trim(0);
-				if (commonKmerSet.size() > 0)
+				if (!commonKmerSet.empty())
 				{
 					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 1000, 2000, 0.2, r, i);
-					if (chain_v.size() > 0)
+					if (!chain_v.empty())
 					{
 						auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
 						ovls.insert(ovls.begin(), v_ovl.begin(), v_ovl.end());
@@ -429,13 +420,17 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 	}
 	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 	lock_guard<mutex> lock(fileMutex);
-	for (auto& ovl : ovls)
+	if (outFile.is_open())
 	{
-		if (ovl.EP1 - ovl.SP1 > ovLen && ovl.EP2 - ovl.SP2 > ovLen)
+		for (auto& ovl : ovls)
 		{
-			outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u, %u\n")
-				% ovl.r1 % ovl.r2 % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[ovl.r1]) % length(seq[ovl.r1]);
+	 		if (ovl.EP1 - ovl.SP1 > ovLen && ovl.EP2 - ovl.SP2 > ovLen)
+	 		{
+	 			outFile << boost::format("%u, %u, %u, %u, %u, %u, %u, %u, %u\n")
+	 				% ovl.r1 % ovl.r2 % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[ovl.r1]) % length(seq[ovl.r2]);
+	 		}
 		}
+	
 	}
 	overlap.insert(overlap.end(), ovls.begin(), ovls.end());
 }
@@ -473,34 +468,6 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 	}
 	return hamming(gap1, gap2) < 0.5f;
 }
-
-//bool cwd::isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b)
-//{
-//	//vector<bool> visited(boost::num_vertices(g));
-//	SubGraph gs;
-//	boost::copy_graph(g, gs);
-//	std::vector<boost::default_color_type> color_map(boost::num_vertices(gs));
-//	auto color = boost::make_iterator_property_map(color_map.begin(), boost::get(boost::vertex_index_t(), gs));
-//	boost::depth_first_search(gs, boost::default_dfs_visitor(), color, a);
-//	//auto xx = color[b];
-//
-//	//DFS(g, a, visited);
-//	return color[b] != boost::default_color_type::white_color;
-//}
-//
-//void cwd::DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited)
-//{
-//	AGraph::out_edge_iterator ei, eend;
-//	auto ep = boost::out_edges(i, g);
-//	ei = ep.first;
-//	eend = ep.second;
-//	for (auto e = ei; e != eend; e++)
-//	{
-//		auto v = boost::target(*e, g);
-//		visited[v] = true;
-//		DFS(g, v, visited);
-//	}
-//}
 
 std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
@@ -570,4 +537,41 @@ void cwd::mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Stri
 		}
 	}
 	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
+}
+
+void cwd::readPAF(const string & file, int minOverlapLen)
+{
+	uint r1, r2;
+	ushort table[9] = { 0 };
+	char op = 0;
+	int orient = 0;
+	FILE* fp = fopen(file.c_str(), "r");
+	if (fp)
+	{
+		//while (fscanf(fp, "%u,%hu,%hu,%hu,%c,%u,%hu,%hu,%hu,%hu,%hu,%hu\n",
+		//              &r1, &table[0], &table[1], &table[2], &op, &r2, &table[3], &table[4], &table[5], &table[6],
+		//              &table[7], &table[8]) != EOF)
+		//while (fscanf(fp, "%u,%hu,%hu,%hu,%c,%u,%hu,%hu,%hu\n",
+		//	&r1, &table[0], &table[1], &table[2], &op, &r2, &table[3], &table[4], &table[5]) != EOF)
+		while (fscanf(fp, "%u, %u, %d, %hu, %hu, %hu, %hu, %hu, %hu, %hu\n",
+			&r1, &r2, &orient, &table[0], &table[1], &table[2], &table[3], &table[4], &table[5], &table[6]) != EOF)
+			//% ovl.r1 % ovl.r2 % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[ovl.r1]) % length(seq[ovl.r2]);
+		{
+			//bool orient = false;
+			//if (op == '+')
+			//{
+			//	orient = true;
+			//}
+			if (table[1] - table[2] > minOverlapLen)
+			{
+				overlap.emplace_back(assemblyInfo_t{r1, r2, table[0], table[1], table[2], table[3], (bool)orient});
+			}
+		}
+		
+	}
+	else
+	{
+		throw invalid_argument("invalid file");
+	}
+	fclose(fp);
 }

@@ -136,4 +136,5 @@ namespace cwd {
 	//void DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited);
 	std::set<size_t> finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump);
+	void readPAF(const string& file, int minOverlapLen);
 }

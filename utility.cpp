@@ -90,3 +90,33 @@ float cwd::hamming(string& a, string& b)
 	}
 	return (float)disCount / (float)a.length();
 }
+
+int convert(const string& paf)
+{
+	using namespace std;
+	FILE* fp = fopen(paf.c_str(), "r");
+	ifstream dict("");
+	string Lname, id;
+	map<string, string> dic;
+	while (dict >> Lname >> id)
+	{
+		dic.insert({ Lname, id });
+	}
+	ofstream output("");
+	string tName;
+	int a, b, c, d, f, g, h, i, j;
+	char e;
+	char LName[100] = { 0 };
+	char tname[100] = { 0 };
+	//while (fscanf(fp, "%d,%[^,],%d,%d,%d,%c,%[^,],%d,%d,%d", &a, LName, &b, &c, &d, &e, tname, &f, &g, &h) != EOF)
+	//    output << dic[string(LName)] << "," << dic[string(tname)] << "," << b << "," << c << "," << d << "," << e << ","
+		//<< f << "," << g << "," << h << endl;
+	while (fscanf(fp, "%[^,],%d,%d,%d,%c,%[^,],%d,%d,%d,%d,%d,%d\n", LName, &a, &b, &c, &e, tname, &d, &f, &g, &h, &i, &j) != EOF)
+	{
+		cout << dic[string(LName)] << endl;
+		output << dic[string(LName)] << "," << a << "," << b << "," << c << "," << e << ","
+			<< dic[string(tname)] << "," << d << "," << f << "," << g << "," << h << "," << i << "," << j << endl;
+	}
+
+	return 0;
+}

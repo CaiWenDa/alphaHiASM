@@ -8,7 +8,24 @@
 extern int optind, opterr, optopt;
 extern char* optargi;
 
-int parseOption(int argc, char* argv[], std::string& file, std::string& outFile, int& genomeSize, int& thread_i)
+void usage()
+{
+	std::cerr <<
+		"usage: alphaHiASM \n\
+		--file - file_1[file_2 ...]\n\
+		--output - dir PATH\n\
+		--genomeSize SIZE\n\
+		--threads int\n\
+		[--minOverlap SIZE]\n\
+		[--help]\n\
+		[--paf inOverlapFile]\n\
+		[--overlap outOverlapFile]\n";
+
+}
+
+bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& asmFileName, int& genomeSize,
+                 int& thread_i, int& minOverlapLen, std::string& paf, std
+                 ::string& overlap)
 {
 	int index = 0;
 	int c = 0; //用于接收选项
@@ -19,7 +36,10 @@ int parseOption(int argc, char* argv[], std::string& file, std::string& outFile,
 		{"file", required_argument, NULL, 'f'},
 		{"output", required_argument, NULL, 'o'},
 		{"genomeSize", required_argument, NULL, 'g'},
-		{"theads", required_argument, NULL, 't'}
+		{"minOverlap", required_argument, NULL, 0},
+		{"theads", required_argument, NULL, 't'},
+		{"paf", required_argument, NULL, 0},
+		{"overlap", required_argument, NULL, 0}
 	};
 
 	/*循环处理参数*/
@@ -30,22 +50,14 @@ int parseOption(int argc, char* argv[], std::string& file, std::string& outFile,
 		switch (c)
 		{
 		case 'h':
-			cerr << 
-			"usage: ToyAssembly \n\
-		--file - file_1[file_2 ...]\n\
-		--outfile - dir PATH\n\
-		--genome - size SIZE\n\
-		--threads int\n\
-		[--min - overlap SIZE]\n\
-		[--help]\n\
-		[--read - error float]\n";
+			usage();
 			break;
 		case 'f':
-			file = optarg;
+			seqFileName = optarg;
 			break;
 			//-n选项必须要参数
 		case 'o':
-			outFile = optarg;
+			asmFileName = optarg;
 			break;
 		case 'g':
 			genomeSize = atoi(optarg);
@@ -57,11 +69,30 @@ int parseOption(int argc, char* argv[], std::string& file, std::string& outFile,
 		case '?':
 			cerr << "unknown option: " << static_cast<char>(optopt) << endl;
 			break;
+		case 0:
+			if (!strcmp(long_options[index].name, "mingOverlap"))
+				minOverlapLen = atoi(optarg);
+			if (!strcmp(long_options[index].name, "paf"))
+				paf = optarg;
+			if (!strcmp(long_options[index].name, "overlap"))
+				overlap = optarg;
 		default:
 			break;
 		}
 	}
-	return 0;
+
+	if (argc <= 4)
+	{
+		usage();
+		return false;
+	}
+	if (seqFileName.empty() || asmFileName.empty() || genomeSize == 0)
+	{
+		usage();
+		return false;
+	}
+
+	return true;
 }
 
 void compSeqInRange(cwd::seqData_t& seq, uint r1, uint r2, uint start1, uint start2, uint end1, uint end2, uint len, bool orient = true);
@@ -71,7 +102,7 @@ int main(int argc, char* argv[])
 	using namespace std;
 	using namespace seqan;
 	using namespace cwd;
-	int ovLen = 2000;
+	int minOverlapLen = 2000;
 	extern int thread_i;
 	extern int genomeSize;
 	//string seqFileName = "/home/caiwenda/dmel.trimmedReads_20x.fasta";
@@ -83,10 +114,13 @@ int main(int argc, char* argv[])
 	string kfFileName = "/home/caiwenda/ecoli_kmerFrequency.txt";
 	//string seqFileName = "dmel.trimmedReads_10x.fasta";
 	// string kfFileName = "/publicdata/Reads/HiFi/D.mel/kmer31.txt";
-	parseOption(argc, argv, seqFileName, asmFileName, genomeSize, thread_i);
-	if (argc <= 4)
+	string paf;
+	string overlapFile;
+	string graphFileName;// = "~/toyAssembly_graph.txt";
+	if (!parseOption(argc, argv, seqFileName, asmFileName, genomeSize, thread_i,
+		minOverlapLen, paf, overlapFile))
 	{
-		return 0;
+		return 1;
 	}
 	cerr << "seqFile : " << seqFileName << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
@@ -106,43 +140,73 @@ int main(int argc, char* argv[])
 	}
 	seqan::clear(ID);
 	malloc_trim(0);
-	auto kmerHashTable = createKmerHashTable(seq, true);
-	//filterKmer(*kmerHashTable, kfFileName);
-	uint block1 = 0;
-	uint block2 = 0;
-	uint b_size = length(seq) / thread_i;
-	ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
+	//ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
+	ofstream outFile(overlapFile, ios_base::out);
 	ofstream seqOut(asmFileName, ios_base::out);
-	//ofstream seqOut;
-	vector<thread> threadPool;
-	cerr << "Detecting Overlap...\n";
+	if (!paf.empty())
+	{
+		cerr << "Reading PAF file...\n";
+		try
+		{
+			readPAF(paf, minOverlapLen);
+		}
+		catch (exception & e)
+		{
+			cerr << e.what() << endl;
+			getchar();
+			return 1;
+		}
+	}
+	else
+	{
+		auto kmerHashTable = createKmerHashTable(seq, true);
+		//filterKmer(*kmerHashTable, kfFileName);
+		uint block1 = 0;
+		uint block2 = 0;
+		uint b_size = length(seq) / thread_i;
+		//ofstream seqOut;
+		vector<thread> threadPool;
+		cerr << "Detecting Overlap...\n";
 #if 1
-	for (size_t i = 0; i < thread_i; i++)
-	{
-		block2 += b_size;
-		threadPool.emplace_back(mainProcess, 
-		                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, ovLen);
-		block1 = block2;
+		for (size_t i = 0; i < thread_i; i++)
+		{
+			block2 += b_size;
+			threadPool.emplace_back(mainProcess, 
+			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, minOverlapLen);
+			block1 = block2;
+		}
+		if (length(seq) % thread_i != 0)
+		{
+			threadPool.emplace_back(mainProcess, 
+			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, minOverlapLen);
+		}
+		for (auto& th : threadPool)
+		{
+			th.join();
+		}
+		kmerHashTable->clear();
+		delete kmerHashTable;
+		threadPool.clear();
+		malloc_trim(0);
+	
 	}
-	if (length(seq) % thread_i != 0)
-	{
-		threadPool.emplace_back(mainProcess, 
-		                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, ovLen);
-	}
-	for (auto& th : threadPool)
-	{
-		th.join();
-	}
-	kmerHashTable->clear();
-	delete kmerHashTable;
-	threadPool.clear();
-	malloc_trim(0);
 	//boost::thread_group tg;
 	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));
 	cerr << "Creating Overlap Graph...\n";
 	extern vector<assemblyInfo_t> overlap;
-	createOverlapGraph(seq, 0, overlap.size());
+	if (0 and !graphFileName.empty())
+	{
+		cerr << "Reading Graph file...\n";
+		vector<AGraph> v_g;
+		readOverlapGraph(graphFileName, v_g);
+	}
+	else
+	{
+		createOverlapGraph(seq, 0, overlap.size());
+	}
 	cerr << "Assembling reads...\n";
+	//clear(seq);
+	//loadSeqData(seqFileName, ID, seq);
 	assembler(seq, seqOut);
 
 	if (false)
