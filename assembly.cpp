@@ -1041,9 +1041,9 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 	assemblyGraph = make_shared<AGraph>();
 	tmpGraph = make_shared<SubGraph>();
 	auto e_prop = boost::get(&AEdge::weight, *assemblyGraph);
-	for (int i = block1; i < block2; i++)
+	for (auto& ovl : overlap)
 	{
-		auto& ovl = overlap[i];
+		//auto& ovl = overlap[i];
 		if (true)
 		{
 			//int j = length(seq[i]);
@@ -1440,4 +1440,5 @@ void cwd::readOverlapGraph(const string& graphName, vector<AGraph>& v_g)
 	//{
 	//	v_g.push_back(graph);
 	//}
+
 }

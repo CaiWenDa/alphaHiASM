@@ -76,9 +76,9 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 	return kmerHashTable;
 }
 
-vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t)
+vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t)
 {
-	shared_ptr<list<alignInfo_t>> chain = make_shared<list<alignInfo_t>>();
+	shared_ptr<vector<alignInfo_t>> chain = make_shared<vector<alignInfo_t>>();
 	vector<decltype(chain)> chain_v;
 	// chain->push_back(CKS.begin()->second);
 	sort(cks.begin(), cks.end(), [](alignInfo_t& a, alignInfo_t& b) { return a.SP1 < b.SP1; });
@@ -125,14 +125,16 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector
 						if (chain->size() > CHAIN_LEN)
 						{
 							chain_v.push_back(chain);
-							chain = make_shared<list<alignInfo_t>>();
+							chain = make_shared<vector<alignInfo_t>>();
 							//chain->push_back(F_END);
 							//iend = prev(chain->end());
 							chain->push_back(*nextx);
 						}
 						else
+						{
+							//chain->erase(next(iend), chain->end());
 							chain->erase(chain->begin(), chain->end());
-						//chain->erase(next(iend), chain->end());
+						}						//chain->erase(next(iend), chain->end());
 						ix = nextx;
 						nextx++;
 					}
@@ -143,14 +145,16 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector
 				if (chain->size() > CHAIN_LEN)
 				{
 					chain_v.push_back(chain);
-					chain = make_shared<list<alignInfo_t>>();
+					chain = make_shared<vector<alignInfo_t>>();
 					//chain->push_back(F_END);
 					//iend = prev(chain->end());
 					chain->push_back(*nextx);
 				}
 				else
+				{
 					//chain->erase(next(iend), chain->end());
 					chain->erase(chain->begin(), chain->end());
+				}
 				ix = nextx;
 				nextx++;
 				continue;
@@ -160,7 +164,7 @@ vector<shared_ptr<list<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector
 		{
 			if (chain->size() > CHAIN_LEN)
 				chain_v.push_back(chain);
-			chain = make_shared<list<alignInfo_t>>();
+			chain = make_shared<vector<alignInfo_t>>();
 			//chain = decltype(chain)(new list<alignInfo_t>());
 			//chain->push_back(F_END);//
 			//iend = prev(chain->end());
@@ -212,7 +216,7 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	return 0;
 }
 
-vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
+vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	vector<assemblyInfo_t> res;
 	auto sumLen = 0;
@@ -368,7 +372,7 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 	}
 }
 
-void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
+void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
 {
 	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
 
@@ -402,7 +406,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 			else
 			{
 				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
-				kmerSet->erase(i);
+				//kmerSet->erase(i);
 				//malloc_trim(0);
 				if (!commonKmerSet.empty())
 				{
@@ -469,7 +473,7 @@ bool cwd::findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, in
 	return hamming(gap1, gap2) < 0.5f;
 }
 
-std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
+std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	std::set<size_t> res;
 	auto sumlen = 0;

@@ -1,5 +1,6 @@
 ﻿#include "assembly.h"
 #include "utility.h"
+#include "memory_info.h"
 #include <cstdlib>
 #include <malloc.h>
 #include <getopt.h>
@@ -70,7 +71,7 @@ bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& 
 			cerr << "unknown option: " << static_cast<char>(optopt) << endl;
 			break;
 		case 0:
-			if (!strcmp(long_options[index].name, "mingOverlap"))
+			if (!strcmp(long_options[index].name, "minOverlap"))
 				minOverlapLen = atoi(optarg);
 			if (!strcmp(long_options[index].name, "paf"))
 				paf = optarg;
@@ -123,6 +124,11 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	cerr << "seqFile : " << seqFileName << endl;
+	cerr << "Total RAM: "
+		<< getMemorySize() / 1024 / 1024 / 1024 << " Gb\n";
+	cerr << "Available RAM: "
+		<< getFreeMemorySize() / 1024 / 1024 / 1024 << " Gb\n";
+	cerr << "Total CPUs: " << std::thread::hardware_concurrency() << endl;
 	// cout << "frequencyFile : " << kfFileName << endl;
 	seqData_t seq;
 	StringSet<CharString> ID;
@@ -131,6 +137,10 @@ int main(int argc, char* argv[])
 	try
 	{
 		loadSeqData(seqFileName, ID, seq);
+		for (int i = optind; i < argc; i++)
+		{
+			loadSeqData(argv[i], ID, seq);
+		}
 	}
 	catch (exception & e)
 	{
@@ -172,13 +182,13 @@ int main(int argc, char* argv[])
 		{
 			block2 += b_size;
 			threadPool.emplace_back(mainProcess, 
-			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, minOverlapLen);
+			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 0, minOverlapLen);
 			block1 = block2;
 		}
 		if (length(seq) % thread_i != 0)
 		{
 			threadPool.emplace_back(mainProcess, 
-			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, minOverlapLen);
+			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 0, minOverlapLen);
 		}
 		for (auto& th : threadPool)
 		{
@@ -348,6 +358,19 @@ int main(int argc, char* argv[])
 
 	cerr << "done!\n";
 	cerr << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
+	auto peakMemByte = getPeakRSS();
+	if (peakMemByte >= 1024 * 1024 * 1024)
+	{
+		cerr << "Peak RAM usage: " << peakMemByte / 1024 / 1024 / 1024 << " Gb\n";
+	}
+	else if (peakMemByte >= 1024 * 1024)
+	{
+		cerr << "Peak RAM usage: " << peakMemByte / 1024 / 1024 << " Mb\n";
+	}
+	else
+	{
+		cerr << "Peak RAM usage: " << peakMemByte / 1024 << " Kb\n";
+	}
 	outFile.close();
 	seqOut.close();
 	getchar();

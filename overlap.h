@@ -89,10 +89,10 @@ namespace cwd {
 	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
 	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
 	kmerHashTable_t* createKmerHashTable(const seqData_t& seq, bool isFull = false);
-	vector<shared_ptr<list<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
-	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<list<alignInfo_t>>>& chain, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
+	vector<shared_ptr<vector<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
+	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
-	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<list<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
+	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen);
 	kmer_t revComp(const kmer_t& kmer);
 
@@ -134,7 +134,7 @@ namespace cwd {
 
 	//bool isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b);
 	//void DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited);
-	std::set<size_t> finalOverlap2(vector<shared_ptr<list<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
+	std::set<size_t> finalOverlap2(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump);
 	void readPAF(const string& file, int minOverlapLen);
 }
