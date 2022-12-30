@@ -14,7 +14,6 @@
 
 namespace cwd {
 	using namespace std;
-	const uint KMER_LEN = 31;
 	template<typename T1, typename T2, typename T3 = std::hash<T1>>
 	using hash = std::unordered_multimap<T1, T2, T3>;
 	using dnaPos_t = ushort;
@@ -97,7 +96,7 @@ namespace cwd {
 	kmer_t revComp(const kmer_t& kmer);
 
 	template<typename T, typename R>
-	vector<alignInfo_t> getCommonKmerSet(T range, R read)
+	vector<alignInfo_t> getCommonKmerSet(T range, R read, const uint KMER_LEN)
 	{
 		vector<alignInfo_t> cks;
 		//unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );

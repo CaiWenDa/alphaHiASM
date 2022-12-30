@@ -5,6 +5,7 @@
 #include <malloc.h>
 #include <getopt.h>
 #include <iostream>
+#include <sys/stat.h>
 
 extern int optind, opterr, optopt;
 extern char* optargi;
@@ -20,13 +21,22 @@ void usage()
 		[--minOverlap SIZE]\n\
 		[--help]\n\
 		[--paf inOverlapFile]\n\
-		[--overlap outOverlapFile]\n";
+		[--overlap outOverlapFile]\n\
+		[--kmerLen kmer len]\n\
+		[--step detect step]\n";
 
 }
 
-bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& asmFileName, int& genomeSize,
-                 int& thread_i, int& minOverlapLen, std::string& paf, std
-                 ::string& overlap)
+bool parseOption(int argc, char* argv[],
+	std::string& seqFileName,
+	std::string& asmFileName,
+	int& genomeSize,
+	int& thread_i,
+	int& minOverlapLen,
+	std::string& paf,
+	std::string& overlap,
+	uint& KMER_LEN,
+	uint& KMER_STEP)
 {
 	int index = 0;
 	int c = 0; //用于接收选项
@@ -40,11 +50,13 @@ bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& 
 		{"minOverlap", required_argument, NULL, 0},
 		{"theads", required_argument, NULL, 't'},
 		{"paf", required_argument, NULL, 0},
-		{"overlap", required_argument, NULL, 0}
+		{"overlap", required_argument, NULL, 0},
+		{"step", required_argument, NULL, 0},
+		{"kmerLen", required_argument, NULL, 'k'}
 	};
 
 	/*循环处理参数*/
-	while (EOF != (c = getopt_long(argc, argv, "hf:o:g:t:", long_options, &index)))
+	while (EOF != (c = getopt_long(argc, argv, "hf:o:g:t:k:", long_options, &index)))
 	{
 		using std::cerr;
 		using std::endl;
@@ -61,10 +73,13 @@ bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& 
 			asmFileName = optarg;
 			break;
 		case 'g':
-			genomeSize = atoi(optarg);
+			genomeSize = cwd::parseGenomeSize(optarg);
 			break;
 		case 't':
 			thread_i = atoi(optarg);
+			break;
+		case 'k':
+			KMER_LEN = atoi(optarg);
 			break;
 			//表示选项不支持
 		case '?':
@@ -77,6 +92,8 @@ bool parseOption(int argc, char* argv[], std::string& seqFileName, std::string& 
 				paf = optarg;
 			if (!strcmp(long_options[index].name, "overlap"))
 				overlap = optarg;
+			if (!strcmp(long_options[index].name, "step"))
+				KMER_STEP = atoi(optarg);
 		default:
 			break;
 		}
@@ -106,6 +123,8 @@ int main(int argc, char* argv[])
 	int minOverlapLen = 2000;
 	extern int thread_i;
 	extern int genomeSize;
+	extern uint KMER_STEP;
+	extern uint KMER_LEN;
 	//string seqFileName = "/home/caiwenda/dmel.trimmedReads_20x.fasta";
 	string seqFileName;//argv[2];//"/home/caiwenda/SRR11292120_sample.fastq";
 	string asmFileName;//argv[3];//"result_chm13_debug713.fasta";
@@ -118,17 +137,27 @@ int main(int argc, char* argv[])
 	string paf;
 	string overlapFile;
 	string graphFileName;// = "~/toyAssembly_graph.txt";
-	if (!parseOption(argc, argv, seqFileName, asmFileName, genomeSize, thread_i,
-		minOverlapLen, paf, overlapFile))
+	if (!parseOption(argc, argv, seqFileName, asmFileName, genomeSize,
+		thread_i, minOverlapLen, paf, overlapFile, KMER_LEN, KMER_STEP))
 	{
 		return 1;
 	}
-	cerr << "seqFile : " << seqFileName << endl;
+	cerr << "SYSTEM INFORMATION: \n";
 	cerr << "Total RAM: "
 		<< getMemorySize() / 1024 / 1024 / 1024 << " Gb\n";
 	cerr << "Available RAM: "
 		<< getFreeMemorySize() / 1024 / 1024 / 1024 << " Gb\n";
 	cerr << "Total CPUs: " << std::thread::hardware_concurrency() << endl;
+	cerr << endl;
+	cerr << "PARAMETERS: \n";
+	cerr << "seqFile: " << seqFileName << endl;
+	cerr << "genomeSize: " << genomeSize << endl;
+	cerr << "minOverlap: " << minOverlapLen << endl;
+	cerr << "kmerSize: " << KMER_LEN << endl;
+	cerr << "kmerStep: " << KMER_STEP << endl;
+	cerr << "thread(s): " << thread_i << endl;
+	cerr << endl;
+	cerr << getCurrentTime() << "\t>>>STAGE: Reading file(s)\n";
 	// cout << "frequencyFile : " << kfFileName << endl;
 	seqData_t seq;
 	StringSet<CharString> ID;
@@ -136,13 +165,20 @@ int main(int argc, char* argv[])
 
 	try
 	{
+		struct stat info;
+		stat(seqFileName.c_str(), &info);
+		auto size = info.st_size;
 		loadSeqData(seqFileName, ID, seq);
 		for (int i = optind; i < argc; i++)
 		{
 			loadSeqData(argv[i], ID, seq);
+			stat(argv[i], &info);
+			size += info.st_size;
 		}
+		cerr << "Reads: " << seqan::length(seq) << endl;
+		cerr << "Estimate reads coverage: " << float(size) / genomeSize << endl;
 	}
-	catch (exception & e)
+	catch (exception& e)
 	{
 		cerr << e.what() << endl;
 		getchar();
@@ -160,7 +196,7 @@ int main(int argc, char* argv[])
 		{
 			readPAF(paf, minOverlapLen);
 		}
-		catch (exception & e)
+		catch (exception& e)
 		{
 			cerr << e.what() << endl;
 			getchar();
@@ -169,6 +205,7 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
+		cerr << getCurrentTime() << "\t>>>STAGE: Hashing\n";
 		auto kmerHashTable = createKmerHashTable(seq, true);
 		//filterKmer(*kmerHashTable, kfFileName);
 		uint block1 = 0;
@@ -176,19 +213,19 @@ int main(int argc, char* argv[])
 		uint b_size = length(seq) / thread_i;
 		//ofstream seqOut;
 		vector<thread> threadPool;
-		cerr << "Detecting Overlap...\n";
+		cerr << getCurrentTime() << "\t>>>STAGE: Detecting Overlap...\n";
 #if 1
 		for (size_t i = 0; i < thread_i; i++)
 		{
 			block2 += b_size;
-			threadPool.emplace_back(mainProcess, 
-			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 0, minOverlapLen);
+			threadPool.emplace_back(mainProcess,
+				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, minOverlapLen);
 			block1 = block2;
 		}
 		if (length(seq) % thread_i != 0)
 		{
-			threadPool.emplace_back(mainProcess, 
-			                        ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 0, minOverlapLen);
+			threadPool.emplace_back(mainProcess,
+				ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, minOverlapLen);
 		}
 		for (auto& th : threadPool)
 		{
@@ -198,11 +235,11 @@ int main(int argc, char* argv[])
 		delete kmerHashTable;
 		threadPool.clear();
 		malloc_trim(0);
-	
+
 	}
 	//boost::thread_group tg;
 	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));
-	cerr << "Creating Overlap Graph...\n";
+	cerr << getCurrentTime() << "\t>>>STAGE: Creating Overlap Graph...\n";
 	extern vector<assemblyInfo_t> overlap;
 	if (0 and !graphFileName.empty())
 	{
@@ -214,7 +251,7 @@ int main(int argc, char* argv[])
 	{
 		createOverlapGraph(seq, 0, overlap.size());
 	}
-	cerr << "Assembling reads...\n";
+	cerr << getCurrentTime() << "\t>>>STAGE: Assembling reads...\n";
 	//clear(seq);
 	//loadSeqData(seqFileName, ID, seq);
 	assembler(seq, seqOut);
@@ -356,8 +393,8 @@ int main(int argc, char* argv[])
 	}
 #endif
 
-	cerr << "done!\n";
-	cerr << "time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
+	cerr << getCurrentTime() << "\tDone!\n";
+	cerr << "CPU time: " << (clock() - start) / CLOCKS_PER_SEC << " sec(s)\n";
 	auto peakMemByte = getPeakRSS();
 	if (peakMemByte >= 1024 * 1024 * 1024)
 	{

@@ -24,6 +24,7 @@ int KMER_LIMIT = 51;
 int thread_i = 9;
 int CHAIN_LEN = 2;
 double DETECT_RATIO = 0.2;
+uint KMER_LEN = 31;
 
 vector<assemblyInfo_t> overlap;
 seqData_t assemblySeq;
@@ -405,7 +406,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 			}
 			else
 			{
-				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
+				auto commonKmerSet = getCommonKmerSet(range, seq[r], KMER_LEN);
 				//kmerSet->erase(i);
 				//malloc_trim(0);
 				if (!commonKmerSet.empty())
@@ -525,7 +526,7 @@ void cwd::mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Stri
 			}
 			else
 			{
-				auto commonKmerSet = getCommonKmerSet(range, seq[r]);
+				auto commonKmerSet = getCommonKmerSet(range, seq[r], KMER_LEN);
 				//cout << commonKmerSet.size() << endl;
 				if (commonKmerSet.size() > 0)
 				{

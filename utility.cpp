@@ -46,6 +46,15 @@ std::string cwd::getCurrentDate()
 	return tmp;
 }
 
+std::string cwd::getCurrentTime()
+{
+	time_t nowtime;
+	nowtime = time(NULL); //获取日历时间   
+	char tmp[64];
+	strftime(tmp, sizeof(tmp), "[%Y-%m-%d %H:%M:%S]", localtime(&nowtime));
+	return tmp;
+}
+
 float cwd::jaccard(string& a, string& b)
 {
 	if (a == "" && b == "")
@@ -119,4 +128,30 @@ int convert(const string& paf)
 	}
 
 	return 0;
+}
+
+uint cwd::parseGenomeSize(const char* str)
+{
+	string arg = str;
+	uint result = 0;
+	char exp = *arg.rbegin();
+	string num_str = { arg.begin(), arg.end() - 1 };// 切片
+	float num = atof(num_str.c_str());
+	if (exp == 'k' or exp == 'K')
+	{
+		result = num * 1000;
+	}
+	else if (exp == 'm' or exp == 'M')
+	{
+		result = num * 1000 * 1000;
+	}
+	else if (exp == 'g' or exp == 'G')
+	{
+		result = num * 1000 * 1000 * 1000;
+	}
+	else
+	{
+		return 0;
+	}
+	return result;
 }
