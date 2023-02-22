@@ -21,10 +21,10 @@
 解压缩
 
     unzip seqan-library-2.4.0.zip
-创建 boost 目录
+将 “seqan-library-2.4.0/*” 复制到 alphaHiASM/seqan
 
     cp -r seqan-library-2.4.0/* alphaHiASM/seqan
-将 “seqan-library-2.4.0/*” 复制到 alphaHiASM/seqan
+创建 boost 目录
 
     mkdir alphaHiASM/boost
 解压缩
