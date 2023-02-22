@@ -30,10 +30,12 @@
 解压缩
 
     tar -zxvf boost_1_78_0.tar.gz
-切换到 alphaHiASM 目录
+
+将“boost_1_78_0/*”复制到alphaHiASM/boost
 
     cp -r boost_1_78_0/* alphaHiASM/boost
-    (将“boost_1_78_0/*”复制到alphaHiASM/boost)
+切换到 alphaHiASM 目录
+
     cd alphaHiASM
 编译
 
