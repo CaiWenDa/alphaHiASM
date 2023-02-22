@@ -45,7 +45,7 @@
 # 使用方法
     alphaHiASM
         --file - file
-    输入文件，格式为fasta或fastq
+    输入文件，格式为 fasta 或 fastq
         --output - dir PATH
     输出文件地址，格式为文本文件
         --genomeSize SIZE
