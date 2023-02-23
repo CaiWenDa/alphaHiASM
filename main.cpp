@@ -162,7 +162,19 @@ int main(int argc, char* argv[])
 	seqData_t seq;
 	StringSet<CharString> ID;
 	clock_t start = clock();
-
+	//ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
+	ofstream outFile(overlapFile, ios_base::out);
+	if (!outFile.is_open())
+	{
+		cerr << "Cannot open file: " << overlapFile << endl;
+		return 1;
+	}
+	ofstream seqOut(asmFileName, ios_base::out);
+	if (!seqOut.is_open())
+	{
+		cerr << "Cannot open file: " << asmFileName << endl;
+		return 1;
+	}
 	try
 	{
 		struct stat info;
@@ -186,9 +198,7 @@ int main(int argc, char* argv[])
 	}
 	seqan::clear(ID);
 	malloc_trim(0);
-	//ofstream outFile("result-" + getCurrentDate() + ".csv", ios_base::out);
-	ofstream outFile(overlapFile, ios_base::out);
-	ofstream seqOut(asmFileName, ios_base::out);
+
 	if (!paf.empty())
 	{
 		cerr << "Reading PAF file...\n";

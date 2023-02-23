@@ -55,7 +55,7 @@
         --threads int
     线程数，默认为 1
         [--minOverlap SIZE]
-    最小重叠
+    最小重叠长度，默认 2000
         [--help]
     获得帮助信息
         [--paf inOverlapFile]
@@ -63,9 +63,9 @@
         [--overlap outOverlapFile]
     输出的比对信息文件要保存的路径
         [--kmerLen kmer len]
-    k-mer 长度
+    k-mer 长度，默认为 31
         [--step detect step]
-    检测步长
+    检测步长，默认为 1
 
 # 示例
 将原始读数文件 reads.fasta 进行自比对，比对结果输出到 output.csv 中：
@@ -75,13 +75,13 @@
 使用多线程提高效率，以 12 线程为例：
 
     alphaHiASM -f reads.fasta --overlap output.csv -t 12
-将原始读数文件 reads.fasta 进行自比对同时进行组装，组装物种的基因组大小估计值为 genomeSize 的参数，比对和组装结果将分别输出到 output.csv 和 asm.fasta 文件中
+将原始读数文件 reads.fasta 进行自比对同时进行组装，组装物种的基因组大小 genomeSize 估计值为 4.8m，比对和组装结果将分别输出到 output.csv 和 asm.fasta 文件中
 
-    alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4600000 -o asm.fasta
+    alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4.6m -o asm.fasta
 
 可同样使用多线程提高效率，以 12 线程为例：
 
-    alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4600000 -o asm.fasta -t 12
+    alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4.6m -o asm.fasta -t 12
 
 # 输出格式
 alphaHiASM 的重叠检测结果以文本文件输出，每一行为一条检测距离，格式如表所示
