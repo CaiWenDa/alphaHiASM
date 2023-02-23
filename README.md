@@ -75,7 +75,7 @@
 使用多线程提高效率，以 12 线程为例：
 
     alphaHiASM -f reads.fasta --overlap output.csv -t 12
-将原始读数文件 reads.fasta 进行自比对同时进行组装，组装物种的基因组大小 genomeSize 估计值为 4.8m，比对和组装结果将分别输出到 output.csv 和 asm.fasta 文件中
+将原始读数文件 reads.fasta 进行自比对同时进行组装，组装物种的基因组大小 genomeSize 估计值为 4.6m，比对和组装结果将分别输出到 output.csv 和 asm.fasta 文件中
 
     alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4.6m -o asm.fasta
 
