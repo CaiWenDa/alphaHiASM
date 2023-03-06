@@ -135,7 +135,7 @@ uint cwd::parseGenomeSize(const char* str)
 	string arg = str;
 	uint result = 0;
 	char exp = *arg.rbegin();
-	string num_str = { arg.begin(), arg.end() - 1 };// ÇÐÆ¬
+	string num_str = { arg.begin(), arg.end() - 1 };
 	float num = atof(num_str.c_str());
 	if (exp == 'k' or exp == 'K')
 	{

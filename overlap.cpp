@@ -21,7 +21,7 @@ mutex overlapMutex;
 
 uint KMER_STEP = 1;
 int KMER_LIMIT = 51;
-int thread_i = 9;
+int thread_i = 1;
 int CHAIN_LEN = 2;
 double DETECT_RATIO = 0.2;
 uint KMER_LEN = 31;
@@ -81,7 +81,6 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 {
 	shared_ptr<vector<alignInfo_t>> chain = make_shared<vector<alignInfo_t>>();
 	vector<decltype(chain)> chain_v;
-	// chain->push_back(CKS.begin()->second);
 	sort(cks.begin(), cks.end(), [](alignInfo_t& a, alignInfo_t& b) { return a.SP1 < b.SP1; });
 	chain->push_back(*cks.begin());
 	for (auto ix = cks.begin(), nextx = next(ix); ix != cks.end() && nextx != cks.end();)
@@ -102,10 +101,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 			}
 			if ((d1 < alpha && d2 < alpha))// and (double(max(d1, d2) - min(d1, d2)) / max(d1, d2) < gamma))
 			{
-				//chain->push_back(*ix);
 				chain->push_back(*nextx);
-				//ix = next(nextx);
-				//nextx = next(ix);
 				ix = nextx;
 				nextx++;
 			}
@@ -127,15 +123,12 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 						{
 							chain_v.push_back(chain);
 							chain = make_shared<vector<alignInfo_t>>();
-							//chain->push_back(F_END);
-							//iend = prev(chain->end());
 							chain->push_back(*nextx);
 						}
 						else
 						{
-							//chain->erase(next(iend), chain->end());
 							chain->erase(chain->begin(), chain->end());
-						}						//chain->erase(next(iend), chain->end());
+						}
 						ix = nextx;
 						nextx++;
 					}
@@ -147,13 +140,10 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 				{
 					chain_v.push_back(chain);
 					chain = make_shared<vector<alignInfo_t>>();
-					//chain->push_back(F_END);
-					//iend = prev(chain->end());
 					chain->push_back(*nextx);
 				}
 				else
 				{
-					//chain->erase(next(iend), chain->end());
 					chain->erase(chain->begin(), chain->end());
 				}
 				ix = nextx;
@@ -166,15 +156,11 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 			if (chain->size() > CHAIN_LEN)
 				chain_v.push_back(chain);
 			chain = make_shared<vector<alignInfo_t>>();
-			//chain = decltype(chain)(new list<alignInfo_t>());
-			//chain->push_back(F_END);//
-			//iend = prev(chain->end());
 			ix = nextx;
 			nextx++;
 			continue;
 		}
 	}
-	//chain->push_back(F_END);
 	if (chain->size() > CHAIN_LEN)
 		chain_v.push_back(chain);
 	return chain_v;
@@ -253,44 +239,6 @@ vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>
 			}
 		}
 	}
-	
-/*	
-	uint P1 = chain.begin()->SP1; // P1
-	uint Q1 = min_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
-	uint Pnk = prev(chain.end())->SP1 + KMER_LEN; // Pn + k
-	uint Qnk = max_element(chain.begin(), chain.end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
-
-	uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
-	ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
-	if (P1 > Q1 && len1 - Pnk <= len2 - Qnk)
-	{
-		ovl_str1 = P1 - Q1;// -1;
-		ovl_end1 = len1 - 1;
-		ovl_str2 = 0;
-		ovl_end2 = Qnk + len1 - Pnk;// -1;
-	}
-	else if (P1 <= Q1 && len1 - Pnk <= len2 - Qnk)
-	{
-		ovl_str1 = 0;
-		ovl_end1 = len1 - 1;
-		ovl_str2 = Q1 - P1;// -1;
-		ovl_end2 = Qnk + len1 - Pnk;// -1;
-	}
-	else if (P1 > Q1 && len1 - Pnk > len2 - Qnk)
-	{
-		ovl_str1 = P1 - Q1;
-		ovl_end1 = Pnk + len2 - Qnk;// -1;
-		ovl_str2 = 0;
-		ovl_end2 = len2 - 1;
-	}
-	else if (P1 <= Q1 && len1 - Pnk >= len2 - Qnk)
-	{
-		ovl_str1 = 0;
-		ovl_end1 = Pnk + len2 - Qnk;// - 1;
-		ovl_str2 = Q1 - P1;// -1;
-		ovl_end2 = len2 - 1;
-	}
-*/
 	return res;
 }
 
@@ -340,7 +288,7 @@ void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqD
 	cerr << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
 	cerr << "seqFile has been read.\n";
-	//ofstream dict("dict_ecoli_trim.txt", ios_base::out);
+	//ofstream dict("dict_dmel_trim10.txt", ios_base::out);
 	//int i = 0;
 	//for (auto& str : id)
 	//{
@@ -350,6 +298,7 @@ void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqD
 	//	//appendValue(ID, split[1]);
 	//	dict << split[0] << " " << i++ << endl;
 	//}
+	//dict.close();
 }
 
 void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
@@ -376,13 +325,6 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
 {
 	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
-
-	//vector<assemblyInfo_t> v_ass;
-	//transform(v_ovl.begin(), v_ovl.end(), back_inserter(v_ass),
-	//		[=](overlapInfo_t& a) {
-	//			return assemblyInfo_t{ r, i, a.SP1, a.EP1, a.SP2, a.EP2, a.orient };
-	//		});
-	
 	overlap.insert(overlap.end(), v_ovl.begin(), v_ovl.end());
 }
 
@@ -396,9 +338,6 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		auto kmerSet = findSameKmer(kmerHashTable, seq, r);
 		for (uint i = r + 1; i < length(seq); i++)
 		{
-			//if (r == 6423 && i == 6859)
-			//	cout << string{ begin(seq[r]), begin(seq[r]) + 5347 } << "\n" << string{ begin(seq[r]), begin(seq[r]) + 5347 } << endl;
-			//else continue;
 			auto range = kmerSet->equal_range(i);
 			if (range.first == range.second)
 			{
@@ -553,20 +492,10 @@ void cwd::readPAF(const string & file, int minOverlapLen)
 	FILE* fp = fopen(file.c_str(), "r");
 	if (fp)
 	{
-		//while (fscanf(fp, "%u,%hu,%hu,%hu,%c,%u,%hu,%hu,%hu,%hu,%hu,%hu\n",
-		//              &r1, &table[0], &table[1], &table[2], &op, &r2, &table[3], &table[4], &table[5], &table[6],
-		//              &table[7], &table[8]) != EOF)
-		//while (fscanf(fp, "%u,%hu,%hu,%hu,%c,%u,%hu,%hu,%hu\n",
-		//	&r1, &table[0], &table[1], &table[2], &op, &r2, &table[3], &table[4], &table[5]) != EOF)
 		while (fscanf(fp, "%u, %u, %d, %hu, %hu, %hu, %hu, %hu, %hu, %hu\n",
 			&r1, &r2, &orient, &table[0], &table[1], &table[2], &table[3], &table[4], &table[5], &table[6]) != EOF)
 			//% ovl.r1 % ovl.r2 % ovl.orient % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2 % length(seq[ovl.r1]) % length(seq[ovl.r2]);
 		{
-			//bool orient = false;
-			//if (op == '+')
-			//{
-			//	orient = true;
-			//}
 			if (table[1] - table[2] > minOverlapLen)
 			{
 				overlap.emplace_back(assemblyInfo_t{r1, r2, table[0], table[1], table[2], table[3], (bool)orient});

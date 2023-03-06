@@ -46,9 +46,9 @@
 
 # 使用方法
     alphaHiASM
-        --file - file
+        --file inFileName
     输入文件，格式为 fasta 或 fastq
-        --output - dir PATH
+        --output outFileName
     输出文件地址，格式为文本文件
         --genomeSize SIZE
     要组装物种的基因组大小，单位为碱基数

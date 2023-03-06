@@ -21,7 +21,7 @@ vector<cwd::ComponentGraph> comps;
 shared_ptr<cwd::AGraph> assemblyGraph;
 shared_ptr<cwd::SubGraph> tmpGraph;
 int OVL_TIP_LEN = 200;// * 80;
-int genomeSize = 0;//100 * 1000000 * 1.0; //5000000;
+int genomeSize = 0;
 std::set<size_t> delReads;
 vector<shared_ptr<list<cwd::assemblyInfo_t>>> assemblyChain;
 
@@ -58,75 +58,10 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 	//vector<pair<vector<int>, size_t>> p_v;
 	vector<vector<vertex_descriptor>> p_v;
 	outAssembly << " Vn: " << n << endl;
-#if 0
-
-	for (size_t src = 0; src < n; src++)
-	{
-		if (boost::out_degree(src, g) < 1)
-		{
-			continue;
-		}
-		vector<double> v_dis(n, numeric_limits<short>::max());
-		v_dis[src] = 0;
-		vector<int> path(n, -1);
-		vector<int> p;
-
-		for (int i = 0; i < n; ++i)
-			path[i] = i;
-		bool r = boost::bellman_ford_shortest_paths(g, n, e_prop, &path[0], &v_dis[0],
-			boost::closed_plus<double>(), std::less<double>(), default_bellman_visitor());
-		int tar = std::distance(v_dis.begin(),
-			std::min_element(std::next(v_dis.begin()), v_dis.end()));
-		if (r)
-		{
-			//copy(v_dis.begin(), v_dis.end(), ostream_iterator<int, char>(cout, " "));
-			//cout << endl;
-			//copy(path.begin(), path.end(), ostream_iterator<int, char>(cout, " "));
-			//cout << endl;
-			outAssembly << " path: ";
-			int s;
-			p.push_back(tar);
-			for (s = path[tar]; s != path[s] && s != tar; s = path[s])
-			{
-				p.push_back(s);
-			}
-			if (s != tar)
-			{
-				p.push_back(s);
-			}
-			std::reverse(p.begin(), p.end());
-			copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outAssembly, " -> "));
-			outAssembly << *p.rbegin() << endl;
-			if (p.size() > 0)
-			{
-				p_v.push_back({ p, tar });
-			}
-		}
-		else
-			cout << "negative cycle." << endl;
-	}
-	auto p = max_element(p_v.begin(), p_v.end(), 
-							[](pair<vector<int>, size_t>& a, pair<vector<int>, size_t>& b)
-							{ 
-								return a.first.size() < b.first.size();
-							}
-						)->first;
-	vector<vector<int>> ps;
-	for (auto& i : p_v)
-	{
-		if (i.first.size() >= p.size())
-		{
-			ps.push_back(i.first);
-		}
-	}
-	return ps;
-#endif // 0
-
 	out_edge_iterator e, eend;
 	std::set<vertex_descriptor> path;
 	vector<vertex_descriptor> vex;
 	int id = 1;
-	//ofstream seqOut("result_ecoli_debug22.fasta", ios_base::app);
 	for (auto v = vi; v != vend; v++)
 	{
 		vex.push_back(*v);
@@ -140,7 +75,7 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 		//seqOut << string{ a, end(assembly) } << endl;
 		//seqOut << endl;
 	}
-	//return p_v;
+
 	for (auto& vs : vex)
 	{
 		if (path.find(vs) != path.end())
@@ -422,11 +357,6 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 					}
 				}
 
-				//sort(v_edge.begin(), v_edge.end(),
-				//	[&e_prop](edge_descriptor a, edge_descriptor b)
-				//{
-				//	return e_prop[a] > e_prop[b];
-				//});
 				auto p = max_element(v_edge.begin(), v_edge.end(),
 					[&e_prop, &g, &adj_prop, &ovl_prop](edge_descriptor a, edge_descriptor b)
 				{
@@ -492,50 +422,16 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 			}
 		}
 
-		//cout << endl;
-		//in_edge_iterator ei, eiend;
-		//vector<vertex_descriptor> pt_pre;
-		//while (boost::in_degree(vs, g))
-		//{
-		//	tie(ei, eiend) = boost::in_edges(vs, g);
-		//	auto p = min_element(ei, eiend,
-		//		[&e_prop](edge_descriptor a, edge_descriptor b)
-		//	{
-		//		return e_prop[a] < e_prop[b];
-		//	}
-		//	);
-		//	auto nextv = boost::source(*p, g);
-		//	if (source.insert(nextv).second)
-		//	{
-		//		vs = nextv;
-		//		pt_pre.push_back(nextv);
-		//		source.insert(nextv);
-		//	}
-		//	else
-		//	{
-		//		break;
-		//	}
-		//}
-		//std::reverse(pt_pre.begin(), pt_pre.end());
-		//pt.insert(pt.begin(), pt_pre.begin(), pt_pre.end());
 		if (pt.size() > 1)
 		{
-			//std::reverse(pt.begin(), pt.end());
-			//copy(pt.begin(), prev(pt.end()), ostream_iterator<int, char>(outAssembly, " -> "));
-			//outAssembly << *pt.rbegin() << endl;
-			//cout << pt.size() << endl;
 			if (pp != p_v.end() && pp->size() > 2)
 			{
 				if (pre_ins)
 				{
-					//p_v.insert(pp, pt);
-					//pp->insert(pp->end(), -1);
 					pp->insert(pp->end(), pt.begin(), pt.end());
 				}
 				else
 				{
-					//p_v.insert(std::next(pp), pt);
-					//pp->insert(pp->begin(), -1);
 					pp->insert(pp->begin(), pt.begin(), pt.end());
 				}
 			}
@@ -544,251 +440,7 @@ vector<vector<vertex_descriptor>> cwd::findPath(const AGraph & g, const seqData_
 		}
 
 	}
-	//auto tmp = p_v[0];
-	//p_v.clear();
-	//for (auto i = tmp.begin(); i != tmp.end(); i++)
-	//{
-	//	p_v.push_back({ tmp.begin(), i });
-	//}
-	//p_v.push_back({ tmp.begin(), tmp.end() });
 	return p_v;
-	vector<vertex_descriptor> merge_p;
-	vector<vector<vertex_descriptor>> p_m;
-	for (auto& p : p_v)
-	{
-		auto v = *p.begin();
-		for (auto ip = p_v.begin() + 1; ip != p_v.end(); ip++)
-		{
-			auto ve = *ip->rbegin();
-			auto e = edge(*(p.begin() + 1), v, g);
-			auto ei = edge(v, ve, g);
-			if (ei.second)
-			{
-				auto adj = adj_prop[e.first];
-				auto adj2 = adj_prop[ei.first];
-				if (adj == AEdge::HeadTail)
-				{
-					if (adj2 == AEdge::HeadHead or adj2 == AEdge::HeadTail)
-					{
-						merge_p = *ip;
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::TailHead)
-				{
-					if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
-					{
-						merge_p = *ip;
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::HeadHead)
-				{
-					if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
-					{
-						merge_p = *ip;
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::TailTail)
-				{
-					if (adj2 == AEdge::HeadTail or adj2 == AEdge::HeadHead)
-					{
-						merge_p = *ip;
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-			}
-			else
-			{
-				p_m.push_back(*ip);
-			}
-		}
-		for (auto ip = p_v.begin() + 1; ip != p_v.end(); ip++)
-		{
-			auto ve = *ip->begin();
-			auto e = edge(*(p.begin() + 1), v, g);
-			auto ei = edge(v, ve, g);
-			if (ei.second)
-			{
-				auto adj = adj_prop[e.first];
-				auto adj2 = adj_prop[ei.first];
-				if (adj == AEdge::HeadTail)
-				{
-					if (adj2 == AEdge::HeadHead or adj2 == AEdge::HeadTail)
-					{
-						merge_p = *ip;
-						std::reverse(merge_p.begin(), merge_p.end());
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::TailHead)
-				{
-					if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
-					{
-						merge_p = *ip;
-						std::reverse(merge_p.begin(), merge_p.end());
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::HeadHead)
-				{
-					if (adj2 == AEdge::TailHead or adj2 == AEdge::TailTail)
-					{
-						merge_p = *ip;
-						std::reverse(merge_p.begin(), merge_p.end());
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-				else if (adj == AEdge::TailTail)
-				{
-					if (adj2 == AEdge::HeadTail or adj2 == AEdge::HeadHead)
-					{
-						merge_p = *ip;
-						std::reverse(merge_p.begin(), merge_p.end());
-						merge_p.insert(merge_p.end(), p.begin(), p.end());
-						p_m.push_back(merge_p);
-					}
-				}
-			}
-		}
-	}
-
-	return p_m;
-	//using aedge =  property_traits<weightMap>::value_type;
-	//int d[450][450];
-	//int paths[450][450];
-	////auto compare = [](AEdge a, AEdge b) { return a.adj % 2 == b.adj % 2;};
-	////auto combine = [](AEdge a, AEdge b) { return a.adj + b.adj;};
-	////boost::floyd_warshall_all_pairs_shortest_paths(g, d, e_prop, compare, combine, std::numeric_limits<int>::max(), 0);
-	//for (int i = 0; i < 450; i++)
-	//{
-	//	for (int j = 0; j < 450; j++)
-	//	{
-	//		paths[i][j] = j;
-	//		d[i][j] = 0;
-	//	}
-	//}
-	//for (vertex_descriptor i = *vi; i < *vend; i++)
-	//{
-	//	for (vertex_descriptor j = *std::next(vi); j < *vend; j++)
-	//	{
-	//		auto e = edge(i, j, g).first;
-	//		if (e.m_eproperty)
-	//		{
-	//			d[i][j] = e_prop[e].weight;
-	//			d[j][i] = d[i][j];
-	//		}
-	//		else
-	//		{
-	//			d[i][j] = d[j][i] = 1;
-	//		}
-	//	}
-	//}
-	//for (vertex_descriptor k = *vi; k < *vend; k++)
-	//{
-	//	for (vertex_descriptor i = *vi; i < *vend; i++)
-	//	{
-	//		for (vertex_descriptor j = *vi; j < *vend; j++)
-	//		{
-	//			if (d[i][j] > d[i][k] + d[k][j])
-	//			{
-	//				auto e = edge(i, k, g).first;
-	//				auto e2 = edge(k, j, g).first;
-	//				if (e.m_eproperty && e2.m_eproperty && e_prop[e].adj % 2 != e_prop[e2].adj % 2)
-	//				{
-	//					d[i][j] = d[i][k] + d[k][j];
-	//					paths[i][j] = k;
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
-	//
-	//int max = 0;
-	//int scr = 0, des = 0;
-	//for (int i = 0; i < len; i++)
-	//{
-	//	for (int j = 0; j < len; j++)
-	//	{
-	//		if (max > d[i][j])
-	//		{
-	//			max = d[i][j];
-	//			des = j;
-	//			scr = i;
-	//		}
-	//	}
-	//}
-	//
-	//int next = paths[scr][des];
-	//cout << "scr: " << scr << " des: " << des << endl;
-	//cout << "path: " << scr << "--" << next << "--";
-	//int i = 0;
-	//for (i = 0; i < len; i++)
-	//{
-	//	next = paths[next][des];
-	//	if (next == des)
-	//	{
-	//		break;
-	//	}
-	//	cout << next << "--";
-	//}
-	//if (i != len)
-	//{
-	//	cout << des << endl;
-	//}
-	
-	//for (vertex_descriptor n = *vi; n != *vend; )
-	//{
-	//	tie(eit, eend) = out_edges(n, g);
-	//	if (path.empty())
-	//		path.push_back(n);
-	//	s[n] = true;
-	//	auto pre = e_prop[*eit];
-	//	int c = std::distance(eit, eend);
-	//	if (c == 0)
-	//	{
-	//		break;
-	//	}
-	//	edge_iterator i = eit;
-
-	//	for (i = eit; i != eend; i++)
-	//	{
-	//		//std::cout << boost::target(it, g) << '\n'; 
-	//		edge_descriptor it = *i;
-	//		if (e_prop[it].adj % 2 != pre.adj % 2)
-	//		{
-	//			s[n] = true;
-	//			pre.adj = e_prop[it].adj;
-	//			if (s[target(it, g)] == true)
-	//			{
-	//				goto L;
-	//			}
-	//			else
-	//			{
-	//				n = target(it, g);
-	//				path.push_back(n);
-	//				break;
-	//			}
-	//		}
-	//		else
-	//		{
-	//			;
-	//		}
-	//	}
-	//	if (i == eend)
-	//	{
-	//		break;
-	//	}
-	//}
-
 }
 
 void cwd::generateContig(const cwd::AGraph & g, std::vector<vertex_descriptor>& p, const cwd::seqData_t& seq, std::ofstream& seqOut, int id, int & totalLen)
@@ -1060,43 +712,6 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 				(isTailTail = len_r - ovl.EP1 < OVL_TIP_LEN && len_i - ovl.EP2 < OVL_TIP_LEN && !ovl.orient)
 				) //TODO direction
 			{
-				//delReads.insert(r);
-				//delReads.insert(i);
-				if (0)
-				{
-					for (auto& chain : assemblyChain)
-					{
-						auto ix = find_if(chain->begin(), chain->end(),
-							[=](assemblyInfo_t& a) {
-							return a.r1 == r || a.r1 == i || a.r2 == r || a.r2 == i;
-						});
-						if (ix != chain->end())
-						{
-							//chain->push_back(ovl);
-							flag = true;
-							chain->insert(next(ix), ovl);
-							//break;
-						}
-						//if (chain->rbegin()->r1 == r || chain->rbegin()->r1 == i)
-						//{
-						//	chain->push_back({ r, i, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
-						//	flag = true;
-						//	break;
-						//}
-						//else if (chain->rbegin()->r2 == r || chain->rbegin()->r2 == i)
-						//{
-						//	chain->push_back({ i, r, ovl.SP1, ovl.EP1, ovl.SP2, ovl.EP2, true });
-						//	flag = true;
-						//	break;
-						//}
-					}
-					if (!flag)
-					{
-						auto n_chain = make_shared<list<assemblyInfo_t>>();
-						n_chain->push_back(ovl);
-						assemblyChain.push_back(n_chain);
-					}
-				}
 				string ovl1 = { begin(seq[r]) + ovl.SP1,  begin(seq[r]) + ovl.EP1 };
 				string ovl2 = { begin(seq[i]) + ovl.SP2,  begin(seq[i]) + ovl.EP2 };
 				if (!ovl.orient)
@@ -1108,10 +723,6 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 				{
 					continue;
 				}
-				//if (delReads.find(r) != delReads.end() || delReads.find(i) != delReads.end())
-				//{
-				//	continue;
-				//}
 				double weight = 1.0 * (len_r + len_i - ovl.EP1 + ovl.SP1) * precision;
 				//double weight = 1.0 * (ovl.EP1 - ovl.SP1) * precision;
 
@@ -1349,25 +960,6 @@ void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
 
 void cwd::assembler(const seqData_t& seq, ofstream& seqOut)
 {
-	//ofstream outAssembly("toyAssembly.csv");
-	//for (auto& chain : assemblyChain)
-	//{
-	//	if (chain->size() < 3)
-	//	{
-	//		continue;
-	//	}
-	//	for (auto& ovl : *chain)
-	//	{
-	//		outAssembly << boost::format("%u, %u, %u, %u, %u, %u\n") 
-	//			% ovl.r1 % ovl.r2 % ovl.SP1 % ovl.EP1 % ovl.SP2 % ovl.EP2;
-	//		
-	//	}
-	//	//cout << "--------------------------------------------------------------\n";
-	//	outAssembly << endl;
-	//}
-	//assemblyChain.clear();
-	//outAssembly.close();
-
 	ofstream outAssembly, outPath;
 	outPath.open("toyAssembly_path.txt");
 	outAssembly.open("toyAssembly_graph.txt");
@@ -1375,12 +967,6 @@ void cwd::assembler(const seqData_t& seq, ofstream& seqOut)
 	int totalLen = 0;
 	for (auto& aGraph : comps)
 	{
-		//	boost::dynamic_properties dp;
-		//	dp.property("node_id", boost::get(&AVertex::r, *aGraph));
-		//	dp.property("node_id", boost::get(&AVertex::r, *aGraph));
-		//	dp.property("label", boost::get(vertex_property_t(), *aGraph));
-		//	dp.property("label", boost::get(edge_property_t(), *aGraph));
-		//	boost::write_graphviz(outAssembly, *aGraph, dp);
 		AGraph g;
 		copy_graph(aGraph, g);
 		boost::write_graphviz(outAssembly, g, boost::make_label_writer(boost::get(vertex_property_t(), aGraph)),
@@ -1408,8 +994,6 @@ void cwd::assembler(const seqData_t& seq, ofstream& seqOut)
 			std::copy(p.begin(), prev(p.end()), ostream_iterator<int, char>(outPath, " -> "));
 			outPath << *p.rbegin() << endl;
 		}
-		//break;
-		//set_union(un.begin(), un.end(), sp.begin(), sp.end(), inserter(un, un.begin()));
 	}
 	comps.clear();
 	overlap.clear();
@@ -1419,26 +1003,5 @@ void cwd::assembler(const seqData_t& seq, ofstream& seqOut)
 
 void cwd::readOverlapGraph(const string& graphName, vector<AGraph>& v_g)
 {
-	//using namespace boost;
-
-	//// Construct an empty graph and prepare the dynamic_property_maps.
-	//AGraph graph(0);
-	//dynamic_properties dp(ignore_other_properties);
-
-	//dp.property("label", get(&AVertex::r, graph));
-	//dp.property("adj", get(&AEdge::adj, graph));
-	//dp.property("weight", get(&AEdge::weight, graph));
-
-	//// Sample graph as an std::istream;
-	//ifstream dot(graphName);
-	//FILE* fp = fopen(graphName.c_str(), "rb");
-	//fread(&comps, 1, 1, fp);
-	//std::istringstream
-	//	gvgraph("digraph { graph [name=\"graphname\"]  a  c e [mass = 6.66] }");
-
-	//while (read_graphviz(dot, graph, dp, "node_id"))
-	//{
-	//	v_g.push_back(graph);
-	//}
-
+	;
 }
