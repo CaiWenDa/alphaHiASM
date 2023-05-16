@@ -132,7 +132,7 @@ alphaHiASM -f reads.fasta --overlap output.csv --genomeSize 4.6m -o asm.fasta -t
 
 ## 输出格式
 
-alphaHiASM 的重叠检测结果以文本文件输出，每一行为一条检测距离，格式如表所示
+alphaHiASM 的重叠检测结果以文本文件输出，每一行为一条检测结果，格式如表所示
 |列 |类型 |描述|
 |:---:|:---:|:---:|
 |1 |int |查询序列编号|
