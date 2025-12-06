@@ -268,7 +268,9 @@ int main(int argc, char* argv[])
 	}
 	outFile.close();
 	seqOut.close();
+#if Debug
 	getchar();
+#endif
 	return 0;
 }
 
