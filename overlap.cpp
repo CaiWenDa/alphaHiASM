@@ -36,6 +36,12 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 	std::default_random_engine dre;
 	std::uniform_int_distribution<int> di(1, KMER_LIMIT);
 	cerr << "Creating HashTable...\n";
+	memset(complement, 'N' , 256);
+	complement['A'] = 'T';
+	complement['T'] = 'A';
+	complement['C'] = 'G';
+	complement['G'] = 'C';
+
 	for (auto& read : seq)
 	{
 		int dlen = length(read) * DETECT_RATIO;
@@ -253,10 +259,10 @@ unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(kmerHashTable_t& kmer
 		kmer1 = { i, i + KMER_LEN };
 		auto rangeP = kmerHashTable.equal_range(kmer1);
 		auto rangeN = kmerHashTable.equal_range(revComp(kmer1));
-		kmer_t rkmer1 = revComp(kmer1);
+		// kmer_t rkmer1 = revComp(kmer1);
 		auto range = rangeP;
 		bool orient = true;
-		int d = distance(range.first, range.second);
+		// int d = distance(range.first, range.second);
 
 		if (distance(rangeP.first, rangeP.second) < distance(rangeN.first, rangeN.second))
 		{
@@ -354,7 +360,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 					if (!chain_v.empty())
 					{
 						auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
-						ovls.insert(ovls.begin(), v_ovl.begin(), v_ovl.end());
+						ovls.insert(ovls.end(), v_ovl.begin(), v_ovl.end());
 						//outputOverlapInfo(r, i, chain_v, seq, ID, outFile, 600, chainLen, ovLen);
 					}
 				}
@@ -381,19 +387,12 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 
 kmer_t cwd::revComp(const kmer_t& kmer)
 {
-	kmer_t rvcKmer = kmer;
+	// 使用查表法优化：直接在一次迭代中完成反向互补	
+	kmer_t rvcKmer(kmer.rbegin(), kmer.rend());
 	for (auto& dNtp : rvcKmer)
 	{
-		switch (dNtp)
-		{
-		case 'A': dNtp = 'T'; break;
-		case 'T': dNtp = 'A'; break;
-		case 'C': dNtp = 'G'; break;
-		case 'G': dNtp = 'C'; break;
-		default: dNtp = 'n';break;
-		}
+		dNtp = complement[static_cast<unsigned char>(dNtp)];
 	}
-	std::reverse(rvcKmer.begin(), rvcKmer.end());
 	// cout << rvcKmer;
 	return rvcKmer;
 }

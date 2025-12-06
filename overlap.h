@@ -81,6 +81,7 @@ namespace cwd {
 		//float precision = 0;
 	} assemblyInfo_t;
 
+	static unsigned char complement[256] = { 'N' };
 	//using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
