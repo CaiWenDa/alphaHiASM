@@ -86,7 +86,9 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t)
 {
 	shared_ptr<vector<alignInfo_t>> chain = make_shared<vector<alignInfo_t>>();
+	chain->reserve(cks.size() / 2);
 	vector<decltype(chain)> chain_v;
+	chain_v.reserve(10);
 	sort(cks.begin(), cks.end(), [](alignInfo_t& a, alignInfo_t& b) { return a.SP1 < b.SP1; });
 	chain->push_back(*cks.begin());
 	for (auto ix = cks.begin(), nextx = next(ix); ix != cks.end() && nextx != cks.end();)
@@ -129,6 +131,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 						{
 							chain_v.push_back(chain);
 							chain = make_shared<vector<alignInfo_t>>();
+							chain->reserve(cks.size() / 2);
 							chain->push_back(*nextx);
 						}
 						else
@@ -146,6 +149,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 				{
 					chain_v.push_back(chain);
 					chain = make_shared<vector<alignInfo_t>>();
+					chain->reserve(cks.size() / 2);
 					chain->push_back(*nextx);
 				}
 				else
@@ -162,6 +166,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 			if (chain->size() > CHAIN_LEN)
 				chain_v.push_back(chain);
 			chain = make_shared<vector<alignInfo_t>>();
+			chain->reserve(cks.size() / 2);
 			ix = nextx;
 			nextx++;
 			continue;
@@ -212,6 +217,7 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	vector<assemblyInfo_t> res;
+	res.reserve(chain_v.size());
 	auto sumLen = 0;
 	for (auto& ch : chain_v)
 	{
@@ -338,6 +344,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
 	vector<assemblyInfo_t> ovls;
+	ovls.reserve((block2 - block1) * 10);
 	for (uint r = block1; r < block2; r++)
 	{
 		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
