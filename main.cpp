@@ -209,32 +209,25 @@ int main(int argc, char* argv[])
 	{
 		cerr << getCurrentTime() << "\t>>>STAGE: Hashing\n";
 		auto kmerHashTable = createKmerHashTable(seq, true);
-		uint block1 = 0;
-		uint block2 = 0;
-		uint b_size = length(seq) / thread_i;
-		vector<thread> threadPool;
+		// 优化分块，保证线程负载均衡
+		vector<std::future<void>> futures;
 		cerr << getCurrentTime() << "\t>>>STAGE: Detecting Overlap...\n";
-#if 1
-		for (size_t i = 0; i < thread_i; i++)
-		{
-			block2 += b_size;
-			threadPool.emplace_back(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, minOverlapLen);
-			block1 = block2;
+	#if 1
+		size_t n = length(seq);
+		size_t chunk = (n + thread_i - 1) / thread_i;
+		for (size_t i = 0; i < thread_i; ++i) {
+			size_t block1 = i * chunk;
+			size_t block2 = std::min((i + 1) * chunk, n);
+			if (block1 >= block2) break;
+			futures.push_back(std::async(std::launch::async, mainProcess,
+				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, n, ref(outFile), 2, minOverlapLen));
 		}
-		if (length(seq) % thread_i != 0)
-		{
-			threadPool.emplace_back(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, minOverlapLen);
-		}
-		for (auto& th : threadPool)
-		{
-			th.join();
+		for (auto& th : futures) {
+			th.wait();
 		}
 		kmerHashTable->clear();
 		delete kmerHashTable;
-		threadPool.clear();
-		malloc_trim(0);
+		futures.clear();
 	}
 	//boost::thread_group tg;
 	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));

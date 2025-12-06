@@ -93,7 +93,7 @@ namespace cwd {
 	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen);
 	kmer_t revComp(const kmer_t& kmer);
 
 	template<typename T, typename R>

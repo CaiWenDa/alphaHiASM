@@ -136,7 +136,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 						}
 						else
 						{
-							chain->erase(chain->begin(), chain->end());
+							chain->clear();
 						}
 						ix = nextx;
 						nextx++;
@@ -154,7 +154,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 				}
 				else
 				{
-					chain->erase(chain->begin(), chain->end());
+					chain->clear();
 				}
 				ix = nextx;
 				nextx++;
@@ -340,7 +340,7 @@ void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t
 	overlap.insert(overlap.end(), v_ovl.begin(), v_ovl.end());
 }
 
-void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen)
+void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen)
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
 	vector<assemblyInfo_t> ovls;
@@ -349,7 +349,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 	{
 		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
 		auto kmerSet = findSameKmer(kmerHashTable, seq, r);
-		for (uint i = r + 1; i < length(seq); i++)
+		for (uint i = r + 1; i < seqLen; i++)
 		{
 			auto range = kmerSet->equal_range(i);
 			if (range.first == range.second)
@@ -375,7 +375,7 @@ void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, Strin
 		}
 		//seqan::clear(seq[r]);
 	}
-	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
+	cerr << boost::format("mapped %d - %d reads.\n") % block1 % (block2 - 1);
 	lock_guard<mutex> lock(fileMutex);
 	if (outFile.is_open())
 	{
