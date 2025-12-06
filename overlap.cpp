@@ -55,7 +55,7 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 				KMER_STEP = di(dre);
 				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
 				hashValue_t kmerInfo{ readID, pos }; //, pos + KMER_LEN };
-				kmerHashTable->insert({ kmer, kmerInfo });
+				kmerHashTable->emplace(kmer, kmerInfo);
 			}
 
 			uint pos2 = distance(begin(read), tailBegin);
@@ -64,7 +64,7 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 				KMER_STEP = di(dre);
 				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
 				hashValue_t kmerInfo{ readID, pos2 }; //, pos + KMER_LEN };
-				kmerHashTable->insert({ kmer, kmerInfo });
+				kmerHashTable->emplace(kmer, kmerInfo);
 			}
 		}
 		else
@@ -74,7 +74,7 @@ kmerHashTable_t* cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 				KMER_STEP = di(dre);
 				kmer_t kmer = { i, i + KMER_LEN }; // *kmer = string(left:b, right:s)
 				hashValue_t kmerInfo{ readID, pos }; //, pos + KMER_LEN };
-				kmerHashTable->insert({ kmer, kmerInfo });
+				kmerHashTable->emplace(kmer, kmerInfo);
 			}
 		}
 		readID++;
@@ -224,27 +224,23 @@ vector<assemblyInfo_t> cwd::finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>
 		if (ch->size() > chainLen)
 		{
 			uint P1 = ch->begin()->SP1; // P1
-			uint Q1 = min_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
+			uint Q1 = ch->begin()->SP2;
 			uint Pnk = ch->rbegin()->SP1 + KMER_LEN; // Pn + k
-			uint Qnk = max_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
-
-			uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
-			ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
-			assemblyInfo_t a;
-			a.r1 = r;
-			a.r2 = i;
-			a.SP1 = ovl_str1;
-			a.SP2 = ovl_str2;
-			a.EP1 = ovl_end1;
-			a.EP2 = ovl_end2;
-			a.orient = ch->begin()->orient;
-			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
+			uint Qnk = ch->begin()->SP2;
+			for (auto it = ch->begin(); it != ch->end(); ++it) {
+				if (it->SP2 < Q1) Q1 = it->SP2;
+				if (it->SP2 > Qnk) Qnk = it->SP2;
+			}
+			Qnk += KMER_LEN;
+			uint ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk;
+			auto len = max(ovl_end1 - ovl_str1, ovl_end2 - ovl_str2);
 			sumLen += len;
 			auto ratio = 1.0 * sumLen / min(len1, len2);
 			if (len > ovLen && ratio < 0.95)
 			{
-				res.push_back(a);
+				res.emplace_back(r, i, ovl_str1, ovl_str2, ovl_end1, ovl_end2, ch->begin()->orient);
 			}
+
 			else if (ratio > 0.99)
 			{
 				//delReads.insert(len1 > len2 ? i : r);
@@ -282,7 +278,7 @@ unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(kmerHashTable_t& kmer
 			uint startPos2 = range.first->second.begin;
 			//kmer_t search = { begin(seq[readID]) + startPos2, begin(seq[readID]) + startPos2 + KMER_LEN };
 			//if (search == kmer1 || search == rkmer1)
-			kmerSet->insert({ readID, {orient, startPos1, startPos2 } });
+			kmerSet->emplace(readID, alignInfo_t{orient, startPos1, startPos2 });
 			//else
 			//{
 			//	kmerSet->insert({ readID, {orient, startPos1, startPos2 } });
