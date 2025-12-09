@@ -79,16 +79,6 @@ namespace cwd {
 		dnaPos_t EP2;
 		bool orient = true;
 		//float precision = 0;
-				assemblyInfo_t()
-		{
-
-		}
-
-		assemblyInfo_t(uint _r1, uint _r2, dnaPos_t _SP1, dnaPos_t _SP2, dnaPos_t _EP1, dnaPos_t _EP2, bool _orient) : 
-			r1(_r1), r2(_r2), SP1(_SP1), SP2(_SP2), EP1(_EP1), EP2(_EP2), orient(_orient)
-		{
-
-		}
 	} assemblyInfo_t;
 
 	static unsigned char complement[256] = { 'N' };
@@ -103,15 +93,11 @@ namespace cwd {
 	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen);
+	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen);
 	kmer_t revComp(const kmer_t& kmer);
 
-	inline vector<alignInfo_t> getCommonKmerSet(std::pair
-		<
-		std::unordered_multimap<uint, cwd::alignInfo_t, std::hash<unsigned int>>::iterator, 
-		std::unordered_multimap<uint, cwd::alignInfo_t, std::hash<unsigned int>>::iterator
-		> range, 
-		const seqan::Dna5String& read, const uint KMER_LEN)
+	template<typename T, typename R>
+	vector<alignInfo_t> getCommonKmerSet(T range, R read, const uint KMER_LEN)
 	{
 		vector<alignInfo_t> cks;
 		//unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );
