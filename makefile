@@ -1,6 +1,6 @@
 CC=g++
 
-CPPFLAGS = -c -g -Wall -O3 -std=c++17
+CPPFLAGS = -c -Wall -O3 -std=c++17
 HEADER_PATH = -I "./seqan/include" -I "./boost"
 
 alphaHiASM: main.o overlap.o assembly.o utility.o
