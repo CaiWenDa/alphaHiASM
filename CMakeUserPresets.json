@@ -1,0 +1,34 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "linux-debug",
+      "displayName": "Linux Debug Configuration",
+      "description": "Debug configuration for Linux",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_CXX_FLAGS": "-Og -pg"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release Configuration",
+      "description": "Release configuration for Linux",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_CXX_FLAGS": "-O3"
+      }
+    }
+  ],
+  "vendor": {
+    "qt-project.org/Presets": {
+      "checksum": "RELyCAU0yBtn1kFb1YTnoFYM/co="
+    }
+  }
+}
