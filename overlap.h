@@ -59,9 +59,9 @@ namespace cwd {
 	} overlapInfo_t;
 
 	typedef struct alignInfo_t {
-		bool orient = true;
 		dnaPos_t SP1;
 		dnaPos_t SP2;
+		bool orient = true;
 
 		alignInfo_t(bool orient_, dnaPos_t SP1_, dnaPos_t SP2_)
 		{
@@ -96,11 +96,11 @@ namespace cwd {
 
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
-	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
-	kmerHashTable_t* createKmerHashTable(const seqData_t& seq, bool isFull = false);
+	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(const kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
+	bool findSmallerSameKmer(const seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
+	kmerHashTable_t createKmerHashTable(const seqData_t& seq, bool isFull = false);
 	vector<shared_ptr<vector<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
-	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
+	vector<assemblyInfo_t> finalOverlap(const vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
 	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
 	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen);

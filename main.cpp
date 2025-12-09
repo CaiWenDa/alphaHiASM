@@ -221,13 +221,12 @@ int main(int argc, char* argv[])
 			size_t block2 = std::min((i + 1) * chunk, n);
 			if (block1 >= block2) break;
 			futures.push_back(std::async(std::launch::async, mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, n, ref(outFile), 2, minOverlapLen));
+				ref(kmerHashTable), ref(seq), ref(ID), block1, block2, n, ref(outFile), 2, minOverlapLen));
 		}
 		for (auto& th : futures) {
 			th.wait();
 		}
-		kmerHashTable->clear();
-		delete kmerHashTable;
+		kmerHashTable.clear();
 		futures.clear();
 	}
 	//boost::thread_group tg;
