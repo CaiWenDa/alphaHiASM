@@ -189,8 +189,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	seqan::clear(ID);
-	extern vector<assemblyInfo_t> overlap;
-	overlap.reserve(length(seq) * 10);
 
 	if (!paf.empty())
 	{
