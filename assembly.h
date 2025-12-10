@@ -84,7 +84,7 @@ namespace cwd
 	vector<vector<vertex_descriptor>> findPath(const AGraph& g, const seqData_t& seq, ofstream& outAssembly);
 	seqan::Dna5String concatReads(const seqan::Dna5String& pre, uint r2, const seqan::Dna5String& R2, const assemblyInfo_t& ovl, cwd::AEdge::Adj adj, bool shouldRev, bool toPrev);
 	seqan::Dna5String concatReadsDirect(const seqan::Dna5String& pre, const seqan::Dna5String& R2);
-	void createOverlapGraph(seqData_t& seq, size_t block1, size_t block2);
+	void createOverlapGraph(const seqData_t& seq, size_t block1, size_t block2);
 	void assembler(const seqData_t& seq, ofstream& seqOut);
 	void readOverlapGraph(const string& graphName, vector<AGraph>& v_g);
 	void connected_components_subgraphs(AGraph const& g);

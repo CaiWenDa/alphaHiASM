@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
 		// 优化分块，保证线程负载均衡
 		vector<std::future<void>> futures;
 		cerr << getCurrentTime() << "\t>>>STAGE: Detecting Overlap...\n";
-	#if 1
+#if 1
 		size_t n = length(seq);
 		size_t chunk = (n + thread_i - 1) / thread_i;
 		for (size_t i = 0; i < thread_i; ++i) {

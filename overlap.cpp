@@ -7,9 +7,9 @@
 #include <random>
 #include <cstdlib>
 #include <fstream>
-#include <boost/graph/copy.hpp>
+#include "boost/graph/copy.hpp"
 #include "boost/graph/depth_first_search.hpp"
-#include <boost/format.hpp>
+#include "boost/format.hpp"
 
 using namespace std;
 using namespace seqan;
@@ -83,9 +83,9 @@ kmerHashTable_t cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 	return kmerHashTable; // depends return value optimization
 }
 
-vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t)
+vector<unique_ptr<vector<alignInfo_t>>> cwd::chainFromStart(const seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t)
 {
-	shared_ptr<vector<alignInfo_t>> chain = make_shared<vector<alignInfo_t>>();
+	auto chain = make_unique<vector<alignInfo_t>>();
 	chain->reserve(cks.size() / 2);
 	vector<decltype(chain)> chain_v;
 	chain_v.reserve(10);
@@ -129,8 +129,8 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 					{
 						if (chain->size() > CHAIN_LEN)
 						{
-							chain_v.push_back(chain);
-							chain = make_shared<vector<alignInfo_t>>();
+							chain_v.push_back(std::move(chain));
+							chain = make_unique<vector<alignInfo_t>>();
 							chain->reserve(cks.size() / 2);
 							chain->push_back(*nextx);
 						}
@@ -147,8 +147,8 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 			{
 				if (chain->size() > CHAIN_LEN)
 				{
-					chain_v.push_back(chain);
-					chain = make_shared<vector<alignInfo_t>>();
+					chain_v.push_back(std::move(chain));
+					chain = make_unique<vector<alignInfo_t>>();
 					chain->reserve(cks.size() / 2);
 					chain->push_back(*nextx);
 				}
@@ -164,8 +164,8 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 		else
 		{
 			if (chain->size() > CHAIN_LEN)
-				chain_v.push_back(chain);
-			chain = make_shared<vector<alignInfo_t>>();
+				chain_v.push_back(std::move(chain));
+			chain = make_unique<vector<alignInfo_t>>();
 			chain->reserve(cks.size() / 2);
 			ix = nextx;
 			nextx++;
@@ -173,7 +173,7 @@ vector<shared_ptr<vector<alignInfo_t>>> cwd::chainFromStart(seqData_t& seq, vect
 		}
 	}
 	if (chain->size() > CHAIN_LEN)
-		chain_v.push_back(chain);
+		chain_v.push_back(std::move(chain));
 	return chain_v;
 }
 
@@ -214,7 +214,7 @@ uint cwd::maxKmerFrequency(ifstream& kmerFrequency)
 	return 0;
 }
 
-vector<assemblyInfo_t> cwd::finalOverlap(const vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
+vector<assemblyInfo_t> cwd::finalOverlap(const vector<unique_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
 {
 	vector<assemblyInfo_t> res;
 	res.reserve(chain_v.size());
@@ -250,11 +250,11 @@ vector<assemblyInfo_t> cwd::finalOverlap(const vector<shared_ptr<vector<alignInf
 	return res;
 }
 
-unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(const kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r)
+unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(const kmerHashTable_t& kmerHashTable, const seqData_t& seq, uint r)
 {
 	//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
 	auto kmerSet = make_unique<cwd::hash<uint, alignInfo_t>>(); //[length(seq)];
-	auto& read1 = seq[r];
+	const auto& read1 = seq[r];
 	kmer_t kmer1;
 	for (auto i = begin(read1); i < end(read1) - KMER_LEN; i++)
 	{
@@ -278,7 +278,7 @@ unique_ptr<cwd::hash<uint, alignInfo_t>> cwd::findSameKmer(const kmerHashTable_t
 			uint startPos2 = range.first->second.begin;
 			//kmer_t search = { begin(seq[readID]) + startPos2, begin(seq[readID]) + startPos2 + KMER_LEN };
 			//if (search == kmer1 || search == rkmer1)
-			kmerSet->emplace(readID, alignInfo_t{orient, startPos1, startPos2 });
+			kmerSet->emplace(readID, alignInfo_t{ orient, startPos1, startPos2 });
 			//else
 			//{
 			//	kmerSet->insert({ readID, {orient, startPos1, startPos2 } });
@@ -330,13 +330,13 @@ void cwd::filterKmer(kmerHashTable_t& kmerHashTable, const string& kfFileName)
 	}
 }
 
-void cwd::outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
+void cwd::outputOverlapInfo(uint r, uint i, const vector<unique_ptr<vector<alignInfo_t>>>& chain_v, const seqData_t& seq, const StringSet<CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen)
 {
 	auto v_ovl = finalOverlap(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
 	overlap.insert(overlap.end(), v_ovl.begin(), v_ovl.end());
 }
 
-void cwd::mainProcess(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString> & ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen)
+void cwd::mainProcess(const cwd::kmerHashTable_t& kmerHashTable, const seqData_t& seq, const StringSet<CharString>& ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen)
 {
 	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
 	vector<assemblyInfo_t> ovls;
@@ -413,76 +413,6 @@ bool cwd::findSmallerSameKmer(const seqData_t& seq, uint r, uint t, uint SKMER_L
 		gap2 = cwd::revComp(gap2);
 	}
 	return hamming(gap1, gap2) < 0.5f;
-}
-
-std::set<size_t> cwd::finalOverlap2(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen)
-{
-	std::set<size_t> res;
-	auto sumlen = 0;
-	for (auto& ch : chain_v)
-	{
-		if (ch->size() > chainLen)
-		{
-			uint P1 = ch->begin()->SP1; // P1
-			uint Q1 = min_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//chain.begin()->SP2; // Q1
-			uint Pnk = ch->rbegin()->SP1 + KMER_LEN; // Pn + k
-			uint Qnk = max_element(ch->begin(), ch->end(), [](alignInfo_t& a, alignInfo_t& b) {return a.SP2 < b.SP2;})->SP2;//prev(chain.end())->SP2 + KMER_LEN; // Qn + k;
-
-			uint ovl_str1, ovl_str2, ovl_end1, ovl_end2;
-			ovl_str1 = P1, ovl_str2 = Q1, ovl_end1 = Pnk, ovl_end2 = Qnk + KMER_LEN;
-			assemblyInfo_t a;
-			a.r1 = r;
-			a.r2 = i;
-			a.SP1 = ovl_str1;
-			a.SP2 = ovl_str2;
-			a.EP1 = ovl_end1;
-			a.EP2 = ovl_end2;
-			a.orient = ch->begin()->orient;
-			auto len = max(a.EP1 - a.SP1, a.EP2 - a.SP2);
-			sumlen += len;
-			float ratio = float(sumlen) / min(len1, len2);
-			if (ratio > 0.6)
-			{
-				res.insert(len1 > len2 ? i : r);
-			}
-		}
-	}
-
-	return res;
-}
-
-void cwd::mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, StringSet<CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump)
-{
-	// 取出表中的一行 ，放到新的表 commonKmerSet 中，然后再去除重复的 kmer
-	for (uint r = block1; r < block2; r++)
-	{
-		//每一个读数一个表，用 ReadID 作为索引，记录 readx 与 readID 之间的相同的 kmer
-		auto kmerSet = findSameKmer(kmerHashTable, seq, r);
-		for (uint i = r + 1; i < length(seq); i++)
-		{
-			auto range = kmerSet->equal_range(i);
-			if (range.first == range.second)
-			{
-				continue;
-			}
-			else
-			{
-				auto commonKmerSet = getCommonKmerSet(range, seq[r], KMER_LEN);
-				//cout << commonKmerSet.size() << endl;
-				if (commonKmerSet.size() > 0)
-				{
-					auto chain_v = chainFromStart(seq, commonKmerSet, KMER_LEN, 15, 300, 500, 0.2, r, i);
-					if (chain_v.size() > 0)
-					{
-						lock_guard<mutex> lock(fileMutex);
-						auto v_ovl = finalOverlap2(chain_v, length(seq[r]), length(seq[i]), r, i, chainLen, ovLen);
-						set_union(dump.begin(), dump.end(), v_ovl.begin(), v_ovl.end(), inserter(dump, dump.begin()));
-					}
-				}
-			}
-		}
-	}
-	cerr << boost::format("mapped %d - %d reads.\n") % block1 % block2;
 }
 
 void cwd::readPAF(const string & file, int minOverlapLen)
