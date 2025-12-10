@@ -44,10 +44,10 @@ kmerHashTable_t cwd::createKmerHashTable(const seqData_t& seq, bool isFull)
 
 	for (auto& read : seq)
 	{
-		int dlen = length(read) * DETECT_RATIO;
 		uint pos = 0;
 		if (!isFull)
 		{
+			int dlen = length(read) * DETECT_RATIO;
 			auto headEnd = begin(read) + dlen - KMER_LEN;
 			auto tailBegin = end(read) - dlen - KMER_LEN;
 			for (auto i = begin(read); i < headEnd; i += KMER_STEP, pos += KMER_STEP)
@@ -290,6 +290,13 @@ void cwd::loadSeqData(const string& seqFileName, StringSet<CharString>& ID, seqD
 	cerr << "Reading seqFile...\n";
 	readRecords(id, seq, seqFileIn);
 	cerr << "seqFile has been read.\n";
+	for (const auto& read : seq)
+	{
+		if (length(read) > std::numeric_limits<ushort>::max()) 
+		{
+			throw std::length_error("read length exceeds ushort max.");
+		}
+	}
 	//ofstream dict("dict_dmel_trim10.txt", ios_base::out);
 	//int i = 0;
 	//for (auto& str : id)
