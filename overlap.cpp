@@ -133,7 +133,7 @@ vector<unique_ptr<vector<alignInfo_t>>> cwd::chainFromStart(const seqData_t& seq
 						}
 						else
 						{
-							chain->erase(chain->begin(), chain->end());
+							chain->clear();
 						}
 						ix = nextx;
 						nextx++;
@@ -150,7 +150,7 @@ vector<unique_ptr<vector<alignInfo_t>>> cwd::chainFromStart(const seqData_t& seq
 				}
 				else
 				{
-					chain->erase(chain->begin(), chain->end());
+					chain->clear();
 				}
 				ix = nextx;
 				nextx++;
