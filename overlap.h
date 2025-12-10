@@ -59,9 +59,9 @@ namespace cwd {
 	} overlapInfo_t;
 
 	typedef struct alignInfo_t {
-		bool orient = true;
 		dnaPos_t SP1;
 		dnaPos_t SP2;
+		bool orient = true;
 
 		alignInfo_t(bool orient_, dnaPos_t SP1_, dnaPos_t SP2_)
 		{
@@ -79,6 +79,16 @@ namespace cwd {
 		dnaPos_t EP2;
 		bool orient = true;
 		//float precision = 0;
+		assemblyInfo_t()
+		{
+
+		}
+
+		assemblyInfo_t(uint _r1, uint _r2, dnaPos_t _SP1, dnaPos_t _SP2, dnaPos_t _EP1, dnaPos_t _EP2, bool _orient) : 
+			r1(_r1), r2(_r2), SP1(_SP1), SP2(_SP2), EP1(_EP1), EP2(_EP2), orient(_orient)
+		{
+
+		}
 	} assemblyInfo_t;
 
 	static unsigned char complement[256] = { 'N' };
@@ -86,18 +96,22 @@ namespace cwd {
 
 	uint maxKmerFrequency(std::ifstream& kmerFrequency);
 	void filterKmer(kmerHashTable_t& kmerHashTable, const std::string& kfFileName);
-	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(kmerHashTable_t& kmerHashTable, seqData_t & seq, uint r);
-	bool findSmallerSameKmer(seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
-	kmerHashTable_t* createKmerHashTable(const seqData_t& seq, bool isFull = false);
-	vector<shared_ptr<vector<alignInfo_t>>> chainFromStart(seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
-	vector<assemblyInfo_t> finalOverlap(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
+	unique_ptr<hash<uint, alignInfo_t>> findSameKmer(const kmerHashTable_t& kmerHashTable, const seqData_t& seq, uint r);
+	bool findSmallerSameKmer(const seqData_t& seq, uint r, uint t, uint SKMER_LEN, int s, int s2, int d, bool orient);
+	kmerHashTable_t createKmerHashTable(const seqData_t& seq, bool isFull = false);
+	vector<unique_ptr<vector<alignInfo_t>>> chainFromStart(const seqData_t& seq, vector<alignInfo_t>& cks, int k, int ks, int alpha, int beta, double gamma, int r, int t);
+	vector<assemblyInfo_t> finalOverlap(const vector<unique_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
 	void loadSeqData(const std::string& seqFileName, seqan::StringSet<seqan::CharString>& ID, seqData_t& seq);
-	void outputOverlapInfo(uint r, uint i, vector<shared_ptr<vector<alignInfo_t>>>& chain_v, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
-	void mainProcess(kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString> & ID, uint block1, uint block2, ofstream& outFile, int chainLen, int ovLen);
+	void outputOverlapInfo(uint r, uint i, const vector<unique_ptr<vector<alignInfo_t>>>& chain_v, const seqData_t& seq, const seqan::StringSet<seqan::CharString>& ID, ofstream& outFile, int minSize, int chainLen, int ovLen);
+	void mainProcess(const kmerHashTable_t& kmerHashTable, const seqData_t& seq, const seqan::StringSet<seqan::CharString>& ID, uint block1, uint block2, uint seqLen, ofstream& outFile, int chainLen, int ovLen);
 	kmer_t revComp(const kmer_t& kmer);
 
-	template<typename T, typename R>
-	vector<alignInfo_t> getCommonKmerSet(T range, R read, const uint KMER_LEN)
+	inline vector<alignInfo_t> getCommonKmerSet(std::pair
+		<
+		cwd::hash<uint, cwd::alignInfo_t, std::hash<uint>>::iterator, 
+		cwd::hash<uint, cwd::alignInfo_t, std::hash<uint>>::iterator
+		> range, 
+		const seqan::Dna5String& read, const uint KMER_LEN)
 	{
 		vector<alignInfo_t> cks;
 		//unique_ptr<hash<kmer_t, alignInfo_t>> commonKmerSet( new hash<kmer_t, alignInfo_t>() );
@@ -134,7 +148,5 @@ namespace cwd {
 
 	//bool isConnected(AGraph& g, vertex_descriptor a, vertex_descriptor b);
 	//void DFS(cwd::AGraph& g, vertex_descriptor i, vector<bool>& visited);
-	std::set<size_t> finalOverlap2(vector<shared_ptr<vector<alignInfo_t>>>& chain_v, uint len1, uint len2, uint r, uint i, int chainLen, int ovLen);
-	void mainProcess2(cwd::kmerHashTable_t& kmerHashTable, seqData_t& seq, seqan::StringSet<seqan::CharString>& ID, int block1, int block2, ofstream& outFile, int chainLen, int ovLen, std::set<size_t> & dump);
 	void readPAF(const string& file, int minOverlapLen);
 }

@@ -685,7 +685,7 @@ void cwd::connected_components_subgraphs(AGraph const& g)
 	//return component_graphs;
 }
 
-void cwd::createOverlapGraph(seqData_t& seq, size_t block1, size_t block2)
+void cwd::createOverlapGraph(const seqData_t& seq, size_t block1, size_t block2)
 {
 	using vertex_descriptor = boost::graph_traits<AGraph>::vertex_descriptor;
 	vertex_descriptor src, dst;

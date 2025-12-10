@@ -189,7 +189,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 	seqan::clear(ID);
-	malloc_trim(0);
 
 	if (!paf.empty())
 	{
@@ -211,7 +210,8 @@ int main(int argc, char* argv[])
 		auto kmerHashTable = createKmerHashTable(seq, true);
 		uint block1 = 0;
 		uint block2 = 0;
-		uint b_size = length(seq) / thread_i;
+		auto n = length(seq);
+		uint b_size = n / thread_i;
 		vector<thread> threadPool;
 		cerr << getCurrentTime() << "\t>>>STAGE: Detecting Overlap...\n";
 #if 1
@@ -219,22 +219,20 @@ int main(int argc, char* argv[])
 		{
 			block2 += b_size;
 			threadPool.emplace_back(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, block2, ref(outFile), 2, minOverlapLen);
+				ref(kmerHashTable), ref(seq), ref(ID), block1, block2, n, ref(outFile), 2, minOverlapLen);
 			block1 = block2;
 		}
 		if (length(seq) % thread_i != 0)
 		{
 			threadPool.emplace_back(mainProcess,
-				ref(*kmerHashTable), ref(seq), ref(ID), block1, length(seq), ref(outFile), 2, minOverlapLen);
+				ref(kmerHashTable), ref(seq), ref(ID), block1, n, n, ref(outFile), 2, minOverlapLen);
 		}
 		for (auto& th : threadPool)
 		{
 			th.join();
 		}
-		kmerHashTable->clear();
-		delete kmerHashTable;
+		kmerHashTable.clear();
 		threadPool.clear();
-		malloc_trim(0);
 	}
 	//boost::thread_group tg;
 	//tg.create_thread(bind(createOverlapGraph, ref(seq), block1, block2));

@@ -55,7 +55,7 @@ std::string cwd::getCurrentTime()
 	return tmp;
 }
 
-float cwd::jaccard(string& a, string& b)
+float cwd::jaccard(const string& a, const string& b)
 {
 	if (a == "" && b == "")
 	{
@@ -78,7 +78,7 @@ float cwd::jaccard(string& a, string& b)
 	return ((float)inter) / (float)uni;
 }
 
-float cwd::hamming(string& a, string& b)
+float cwd::hamming(const string& a, const string& b)
 {
 	if (a == "" || b == "")
 	{
